@@ -1,0 +1,27 @@
+# Combine the posterior samples from multiple MCMC chains, import them into the HMSC model structure, and saves the processed model for further analysis
+
+# Set path to libraries
+.libPaths("/cluster/work/users/smo120/hmsc-hpc-dir/r-libraries")
+
+# Load libraries
+library("Hmsc")
+library("jsonify")
+
+load("occurrence_model_1o")
+
+thin = 100 # interval of iterations per samples
+nSamples = 250 # number of samples taken per chain
+nChains = 4
+verbose = 100
+transient = nSamples * thin
+
+chainList = vector("list", nChains)
+
+for(cInd in 1:nChains){
+    chain_file_path = file.path(getwd(), sprintf("post_chain%.2d_file_1o.rds", cInd-1))
+    chainList[[cInd]] = from_json(readRDS(file = chain_file_path)[[1]])[[1]]
+}
+        
+occurrence_model_1o_processed = importPosteriorFromHPC(model_structure, chainList, nSamples, thin, transient)
+occurrence_model_1o_processed
+save(occurrence_model_1o_processed, file = "occurrence_model_1o_processed")
