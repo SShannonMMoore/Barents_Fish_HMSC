@@ -1,1 +1,436 @@
+library(tidyverse)
+library(ape)
+# Package for phylogenetics
+library(data.table)
+# Package for fread command
+library(hutilscpp)
+# Package for match_nrst_haversine (nearest neighbor for coordinates in 
+# survey and environmental covariates)
+library(Hmsc)
+# Package with HMSC model
+library(vioplot)
+library(EDISON)
+# For running MCMC (I think)
+library(turboEM)
+# Also for MCMC (I think...)
+library(corrplot)
+library(abind)
+library(viridisLite)
+library(sp)
+library(RColorBrewer)
+library(ggcorrplot)
+library(jsonify)
+library(rapidjsonr)
+library(colorspace)
+library(dggridR)
+library(readr)
+citation(package = "dggridR")
+R.version
 
+## Load Required Data
+load("NOR-BTS_clean.RData")
+bess <- data  
+
+## Reorganize bess Data
+bess <- bess %>%
+  dplyr::select(haul_id, year, month, day, latitude, longitude, num, verbatim_name, accepted_name) %>%
+  mutate(
+    siteyear = str_c(year, longitude, latitude),
+    site = str_c(longitude, latitude),
+    date = str_c(day, month, year)
+  )
+    # Creates new column (siteyear) that combines year, lon, and lat
+    # Creates new column (site) that combines lon and lat
+
+## Handle Missing Data
+bess.na <- as.data.frame(which(is.na(bess), arr.ind = TRUE))
+bess <- bess[complete.cases(bess), ]  
+
+## Create Unique Sample Identifier
+ID <- bess %>%
+  dplyr::select(siteyear) %>%
+  unique() %>%
+  mutate(sample = 1:length(siteyear))
+bess <- dplyr::left_join(bess, ID, by = "siteyear") %>%
+  dplyr::select(-siteyear) %>%
+  dplyr::relocate(sample, .before = everything())
+
+## Spread Data into Wide Format
+bess.spread <- bess %>%
+  mutate(accepted_name_1 = accepted_name) %>%
+  group_by(sample, accepted_name_1) %>%
+  pivot_wider(names_from = accepted_name_1, values_from = num) %>%
+  mutate(across(everything(), ~replace_na(., 0)))
+bess.spread <- aggregate(bess.spread[, 12:ncol(bess.spread)],
+                         by = bess.spread[1], 
+                         FUN = function(bess.spread) sum(bess.spread, na.rm = TRUE))
+ 
+## Extract Metadata and Add Back to bess.spread
+bess.meta <- bess %>%
+  dplyr::select(sample, haul_id, year, month, day, latitude, longitude) %>%
+  distinct(sample, .keep_all = TRUE)
+bess.spread <- left_join(bess.meta, bess.spread, by = "sample")
+ 
+## Handle Duplicated Coordinates
+duplicated_coords <- bess.spread[duplicated(bess.spread[, 6:7]), ]
+bess.spread <- anti_join(bess.spread, duplicated_coords, by = "sample")
+duplicated_coords <- duplicated_coords %>%
+  mutate(
+    latitude = latitude + 0.00001,
+    longitude = longitude + 0.00001
+  )
+bess.spread <- bind_rows(duplicated_coords, bess.spread)
+
+# Make list of all species included from beginning
+species.list <- tibble(species = colnames(bess.spread))
+species.list <- species.list[8:nrow(species.list), ]
+
+## Remove Rare Species (less than 10 occurrences over space and time)
+bess.spread.b <- bess.spread %>% dplyr::select(1,3,8:ncol(bess.spread))
+species.columns <- setdiff(names(bess.spread.b), c("sample", "year"))
+df.occurrence <- bess.spread.b
+df.occurrence[, species.columns] <- ifelse(bess.spread.b[, species.columns] > 0, 1, 0)
+occurrences.by.year <- df.occurrence %>%
+  group_by(year) %>%
+  summarise(across(all_of(species.columns), ~ sum(. > 0))) %>%
+  summarise(across(all_of(species.columns), ~ sum(. > 0)))
+occurrences.by.year <- occurrences.by.year %>% 
+  pivot_longer(cols = everything(), names_to = "species", values_to = "year.count")
+
+occurrences.by.sample <- df.occurrence %>%
+  group_by(sample) %>%
+  summarise(across(all_of(species.columns), ~ sum(. > 0))) %>%
+  summarise(across(all_of(species.columns), ~ sum(. > 0)))
+occurrences.by.sample <- occurrences.by.sample %>% 
+  pivot_longer(cols = everything(), names_to = "species", values_to = "sample.count")
+
+occurrences.combined <- left_join(occurrences.by.sample, occurrences.by.year)
+
+# Filter species with >= 10 occurrences in both year and sample
+valid.species <- occurrences.combined %>%
+  filter(year.count >= 10 & sample.count >= 10) %>%
+  pull(species)
+# Filter the original data frame to keep only valid species
+bess.spread.filtered <- bess.spread %>%
+  dplyr::select(sample, year, all_of(valid.species))
+
+## Add Metadata to selected.species to re-Create bess.spread
+bess.spread <- bess.spread %>%
+  dplyr::select(-all_of(species.columns)) %>%  # Remove species columns from the original dataset
+  left_join(bess.spread.filtered, by = c("sample", "year"))
+
+## Convert Abundance Data to Occurrence Data
+bess.spread <- cbind(bess.spread[1:7], ifelse(bess.spread[8:ncol(bess.spread)]>0,1,0))
+
+## Remove 0s for Abundance Part of Hurdle Approach
+#bess.spread[bess.spread == 0] <- NA
+
+## Create Study Design (ALREADY CREATED IN R STUIDO TO MAKE SURE HEXAGONS ARE INCLUDED)
+  # Code for RStudio
+    # Construct study design
+      library(dggridR)
+      study.design = bess.spread %>%
+        dplyr::select(sample, year, month, day, latitude, longitude)
+      study.design$time <- as.Date(with(study.design, paste(year, month, day,sep="-")), "%Y-%m-%d")
+      study.design <- study.design %>% mutate(site.hole = str_c(latitude, longitude))  
+    # Construct global grid with cells approximately 300 km across
+      grid <- dgconstruct(spacing = 300, metric = TRUE, resround = 'down')
+    # Assign each survey (latitude-longitude pair) to a grid cell
+      study.design$cell <- dgGEO_to_SEQNUM(grid, study.design$longitude, study.design$latitude)$seqnum
+    # Get center coordinates of each grid cell
+      cellcenters <- dgSEQNUM_to_GEO(grid, study.design$cell)
+      cellcenters.df <- data.frame(
+        cell.center.longitude = unlist(cellcenters$lon_deg),
+        cell.center.latitude = unlist(cellcenters$lat_deg)
+      )
+    # Create dataframe with cell IDs and their center coordinates
+      cell_data <- data.frame(
+        cell.ID = study.design$cell,
+        cell.center.latitude = cellcenters.df$cell.center.latitude,
+        cell.center.longitude = cellcenters.df$cell.center.longitude
+        ) %>%
+        distinct()  # Ensure unique rows
+    # Join the cell data to the survey data
+      study.design <- left_join(study.design, cell_data, by = c('cell' = 'cell.ID'))
+     # Count the number of surveys in each grid cell
+      surveycounts <- study.design %>%
+        count(cell, name = "count")  # `fcount` is shorthand for counting grouped data
+    # Get grid cell boundaries for cells with surveys
+      polygon.boundaries <- dgcellstogrid(grid, surveycounts$cell)
+    # Add survey counts to the grid cell boundaries
+      polygon.boundaries <- merge(
+        polygon.boundaries, 
+        surveycounts, 
+        by.x = "seqnum", 
+        by.y = "cell"
+      )
+    # Get polygons for Norway and filter for the region of interest
+      norway <- map_data("world", region = "Norway")
+      norway_filtered <- norway[norway$lat >= 67.5, ]
+    # Plot
+      ggplot() +
+        geom_polygon(
+          data = norway_filtered, 
+          aes(x = long, y = lat, group = group), 
+          fill = "white", 
+          color = "black"
+        ) +
+        geom_sf(
+          data = polygon.boundaries, 
+          aes(fill = count), 
+          color = alpha("white", 0.4)
+        ) +
+        geom_point(
+          data = cellcenters.df, 
+          aes(x = cell.center.longitude, y = cell.center.latitude)
+        ) +
+      scale_fill_gradient(low = "blue", high = "red") +
+      labs(title = "Survey Hexagons and Counts", fill = "Survey Count") +
+      theme_minimal()
+head(study.design)
+save(study.design, file = "study.design.polygons.R") 
+load("study.design.polygons.R")
+nrow(study.design)
+
+## Create Species Matrix
+species <- bess.spread %>%
+  dplyr::select(8:ncol(bess.spread)) %>%
+  as.data.frame() %>%
+  apply(2, as.numeric) %>%
+  as.data.frame()
+colsums <- species %>%
+  colSums(na.rm = T) %>%
+  sort() %>% 
+  as.data.frame()
+colSums(colsums)
+
+new.order <- sort(colnames(species),)
+species <- species[, new.order]
+
+## Read in Taxonomic Data
+taxo <- data %>%
+  dplyr::select(accepted_name, kingdom, phylum, class, order, family, genus) %>%
+  distinct() %>%
+  mutate(
+    class = coalesce(class, phylum),
+    order = coalesce(order, class),
+    family = coalesce(family, order),
+    genus = coalesce(genus, family)
+  )
+taxo <- taxo %>%
+  filter(accepted_name %in% colnames(bess.spread))
+taxo <- as.data.frame(unclass(taxo), stringsAsFactors = TRUE)
+
+taxo <- as.phylo(~phylum/class/order/family/genus/accepted_name, 
+                   data = taxo, 
+                   collapse = FALSE)
+taxo$edge.length <- rep(1, length(taxo$edge))
+taxo$tip.label <- gsub("_"," ",taxo$tip.label)
+
+#pdf("Rplots_taxonomic_tree.pdf")
+plot(taxo, cex=0.4)
+print("Taxonomic tree plotted")
+
+## Read in Trait Data
+traits <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
+  dplyr::select(species, fecundity, max.body.size, trophic.level) %>%
+  mutate(log_fecundity = log(fecundity)) %>%
+  dplyr::select(-fecundity) %>%
+  na.omit() 
+
+valid.species.df <- as.data.frame(valid.species)
+colnames(valid.species.df)[1] <- "species"
+
+traits <- left_join(valid.species.df, traits)
+
+# Funky stuff happening with encoding so had to manually insert values for those 4 missing species
+incorrect_values <- data.frame(
+  species = c("Lycenchelys muraena", "Lycenchelys sarsii", "Lycodes paamiuti", "Phycis blennoides"),
+  trophic.level = c(3.50, 3.21, 3.65, 3.66),  # Correct values for trophic.level
+  log_fecundity = c(3.367296, 3.218876, 3.401197, 14.31258), # Correct values for log_fecundity
+  max.body.size = c(23, 23, 24, 50)   # Correct values for max.body.size
+)
+
+traits <- traits %>%
+  mutate(
+    trophic.level = case_when(
+      species == "Lycenchelys muraena" ~ 3.50, 
+      species == "Lycenchelys sarsii" ~ 3.21,  
+      species == "Lycodes paamiuti" ~ 3.65, 
+      species == "Phycis blennoides" ~ 3.66, 
+      TRUE ~ trophic.level        
+    ),
+    log_fecundity = case_when(
+      species == "Lycenchelys muraena" ~ 3.367296,  
+      species == "Lycenchelys sarsii" ~ 3.218876,  
+      species == "Lycodes paamiuti" ~ 3.401197,  
+      species == "Phycis blennoides" ~ 14.31258,  
+      TRUE ~ log_fecundity          
+    ),
+    max.body.size = case_when(
+      species == "Lycenchelys muraena" ~ 23,  
+      species == "Lycenchelys sarsii" ~ 23,
+      species == "Lycodes paamiuti" ~ 24,  
+      species == "Phycis blennoides" ~ 50,  
+      TRUE ~ max.body.size       
+    )
+  )
+
+traits <- traits %>% 
+  arrange(species)
+traits.used <- traits
+head(traits.used)
+write.table(traits.used, "traits.used.csv", sep = ";", row.names = FALSE, quote = TRUE)
+
+traits <- traits %>% 
+  dplyr::select(-species) %>%
+  data.matrix()
+is.numeric(traits)
+
+## Read in Environmental Covariates Data
+env.data <- read.csv("SST.SBT.SSS.SBS.depth.icedays.mlotst.seasonality.csv")
+env.data <- env.data %>%
+  dplyr::select(-SSS, SSS_seasonality)
+head(env.data)
+  
+  
+  
+  mutate(
+    sea_ice = ifelse(siconc > 0.15, 1, 0),
+    log_depth = log(model_depth)
+  ) %>%
+  dplyr::select(-siconc, -model_depth, -SSS, -SSS_seasonality) %>%
+  dplyr::rename(
+    SST = thetao,
+    SBT = bottomT,
+    mixed_layer = mlotst
+  )
+
+data_with_na <- factor(ifelse(is.na(species), "NA", as.character(species)))
+ggplot(data.frame(value = data_with_na), aes(x = value)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  labs(
+    title = "Histogram Including NA Values",
+    x = "Values",
+    y = "Count"
+  ) +
+  theme_minimal()## Match Environmental Covariates to Sampling Coordinates
+
+# Extract coordinates
+load("study.design.polygons.R")
+survey.coords <- dplyr::select(study.design, latitude, longitude)
+head(survey.coords)
+env.coords <- dplyr::select(env.data, latitude, longitude)
+head(env.coords)
+
+unique.env.coords <- env.coords %>% distinct(latitude, longitude, .keep_all=TRUE)
+
+# Match environmental coordinates to closest survey coordinates
+start.time <- Sys.time()
+start.time
+matched.coords <- match_nrst_haversine(
+  survey.coords$latitude, survey.coords$longitude,
+  unique.env.coords$latitude, unique.env.coords$longitude,
+  cartesian_R = 0.125
+)
+print(Sys.time() - start.time)
+  # matched.coords should be same length as survey.coords
+
+head(matched.coords)
+unique.env.coords[2554,]
+survey.coords[1,]
+  # Matches
+
+# Add positional indices to survey and matched coordinates
+survey.coords <- survey.coords %>%
+  mutate(index = 1:nrow(survey.coords))
+matched.coords <- matched.coords %>%
+  mutate(index = 1:nrow(matched.coords))
+
+unique.survey.coords <- survey.coords %>% distinct(latitude, longitude, .keep_all=TRUE)
+unique.matched.coords <- matched.coords %>% distinct(pos, .keep_all=TRUE)
+
+# Join matched coordinates with survey coordinates
+survey.coords.matched.coords <- left_join(matched.coords, survey.coords, by = "index")
+survey.coords.matched.coords <- survey.coords.matched.coords %>%
+  dplyr::rename(
+  survey.longitude = longitude,
+  survey.latitude = latitude,
+)
+
+# Add positional indices to environmental coordinates
+unique.env.coords <- unique.env.coords %>%
+  mutate(index = 1:nrow(unique.env.coords))
+
+# Join matched survey coordinates with environmental coordinates
+all.matched.coords <- left_join(survey.coords.matched.coords, unique.env.coords, by = c('pos' = 'index'))
+all.matched.coords <- all.matched.coords %>%
+  dplyr::rename(
+    env.longitude = longitude,
+    env.latitude = latitude,
+  )
+
+# Rename columns for clarity and create site identifiers
+all.matched.coords <- all.matched.coords %>%
+  dplyr::select(-pos, -dist, -index) %>%
+  mutate(
+    survey.site = str_c(survey.latitude, survey.longitude),
+    env.site = str_c(env.latitude, env.longitude)
+  )
+
+unique.survey.site <- all.matched.coords %>% distinct(survey.site, .keep_all=TRUE)
+unique.study.design <- study.design %>% distinct(site.hole, .keep_all=TRUE)
+
+## Merge with Survey Data
+# Join environmental coordinates with survey data
+env.coords.study.design <- left_join(all.matched.coords, unique.study.design, by = c('survey.site' = 'site.hole'))
+head(env.coords.study.design)
+
+# Remove redundant columns and create unique site-time identifier
+env.coords.study.design <- env.coords.study.design %>%
+  dplyr::select(-latitude, -longitude, -year, -month, -day) %>%
+  mutate(env.time = str_c(env.latitude, env.longitude, time))
+
+# Prepare environmental data for merging
+env.data <- env.data %>%
+  mutate(env.time = str_c(latitude, longitude, time))
+
+# Convert time column to `IDate` format for consistency
+env.coords.study.design$time <- as.IDate(env.coords.study.design$time)
+
+# Merge environmental data with survey data using the site-time identifier
+start.time <- Sys.time()
+env.merged <- left_join(env.coords.study.design, env.data, by = "env.time")
+print(Sys.time() - start.time)  # Print time taken for merging
+
+## Finalize Environmental Data
+# Clean up the merged data
+env.coords.time <- env.merged %>%
+  dplyr::select(
+    -survey.site, -env.site, -env.time, -latitude, -longitude, -time.y
+  ) %>%
+  dplyr::rename(time = time.x)
+
+# Extract relevant environmental covariates for modeling
+environment <- env.merged %>%
+  dplyr::select(
+    log_depth, SST, SBT, SSS, SBS, SST_seasonality,  
+    SBT_seasonality, SSS_seasonality, SBS_seasonality, mixed_layer, sea_ice)
+
+## Save 
+head(study.design)
+nrow(study.design)
+# Study design
+head(species)
+nrow(species)
+# Species abundance
+head(taxo)
+# Species phylogeny
+head(traits)
+nrow(traits)
+# Species traits
+head(environment)
+nrow(environment)
+# Environmental covariates
+
+save(study.design, species, taxo, traits, environment, file="HMSC_occurrence_1o")
