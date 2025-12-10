@@ -1,0 +1,1012 @@
+# Load required libraries
+library(tidyverse)
+library(ape)
+# Package for phylogenetics
+library(data.table)
+# Package for fread command
+library(hutilscpp)
+# Package for match_nrst_haversine (nearest neighbor for coordinates in 
+# survey and environmental covariates)
+library(Hmsc)
+# Package with HMSC model
+library(vioplot)
+library(corrplot)
+library(abind)
+library(viridisLite)
+library(sp)
+library(RColorBrewer)
+library(ggcorrplot)
+library(jsonify)
+library(rapidjsonr)
+library(colorspace)
+library(here)
+library(concaveman)
+library(dplyr)
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(vegan)
+library(readr)
+library(ggOceanMaps)
+
+# Load model
+load("occurrence_model_1o_processed")
+load("HMSC_occurrence_1o")
+print("loaded")
+pa.model <- occurrence_model_1o_processed
+mpost.pa.model= convertToCodaObject(pa.model)
+
+
+
+
+vp.pa.model$R2T$Beta
+
+vp.pa.model$R2T$Y
+# The proportion of variance in the species' responses explained by the model
+
+mean(vp.pa.model$R2T$Beta[-1])
+# How much do traits mediate the response to the environment 
+
+
+
+
+
+# Figure 1. Study area ----------------------------------------------------
+# Obs! Polar front was estimated and drawn on top of this figure in Inkscape
+sampling.coords <- study.design %>%
+  dplyr::select(latitude, longitude)
+
+sampling.bathymetry.map <- basemap(limits = c(0, 50, 69, 83), bathy.style = "rcb", crs = 4326) + 
+  geom_point(data = sampling.coords, aes(x = longitude, y = latitude), color = "green3", size = 0.05) +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_blank(),  # X-axis label size
+    axis.title.y = element_blank(),  # Y-axis label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+    panel.grid.major = element_line(color = "black", size = 0.05),  # Change major grid line color
+    panel.grid.minor = element_line(color = "black", size = 0.05),  # Change minor grid line color
+  )
+ggsave("sampling.bathymetry.map.tiff", plot=sampling.bathymetry.map, device="tiff", width=12, height=9, units="cm", dpi=300)
+
+
+
+
+
+# Figure 2. Proportion of variation ----------------------------------------------------
+# Specify groups of how the variation should be partitioned
+groupnames.vp.pa.model = c("Depth","SST","SBT","SBS","Mixed_Layer_Depth", "SST_seasonality", "SBT_seasonality", "SBS_seasonality", "Sea_Ice")
+group.vp.pa.model = c(1,1,2,3,4,5,6,7,8,9)
+
+# Compute species-specific variance partitioning
+vp.pa.model <- computeVariancePartitioning(pa.model, group = group.vp.pa.model, groupnames = groupnames.vp.pa.model)
+
+# Transform variance partitioning results into a data frame and reshape for plotting
+t.vp.pa.model <- data.frame(t(vp.pa.model$vals))
+t.vp.pa.model$Species <- rownames(t.vp.pa.model)
+
+t.vp.pa.model <- reshape2::melt(t.vp.pa.model %>%
+                                  group_by(Species) %>%
+                                  summarise(
+                                    Depth = Depth,
+                                    SST = SST,
+                                    SBT = SBT,
+                                    SBS = SBS,
+                                    Mixed_Layer_Depth = Mixed_Layer_Depth,
+                                    SST_seasonality = SST_seasonality,
+                                    SBT_seasonality = SBT_seasonality,
+                                    SBS_seasonality = SBS_seasonality,
+                                    Sea_Ice = Sea_Ice,
+                                    Random..site = Random..site,
+                                    Random..year = Random..year),
+                                id = "Species")
+
+# Separate fixed and random variables
+mean.vp.pa.model <- t.vp.pa.model %>%
+  group_by(variable) %>%
+  summarise(Mean = mean(value, na.rm = TRUE)) %>%
+  mutate(
+    Type = ifelse(variable %in% c("Random..site", "Random..year"), "Random", "Fixed")
+  )
+fixed.variables <- mean.vp.pa.model %>%
+  filter(Type == "Fixed") %>%
+  arrange(desc(Mean))  # Order fixed variables by decreasing mean
+random.variables <- mean.vp.pa.model %>%
+  filter(Type == "Random")  # Keep random variables as is
+
+# Combine fixed and random variables
+final.order <- c(fixed.variables$variable, random.variables$variable)
+
+# Reorder the variables
+t.vp.pa.model$variable <- factor(t.vp.pa.model$variable, levels = final.order)
+
+# Create a named vector for legend labels in the correct order
+legend.labels <- setNames(
+  paste(mean.vp.pa.model$variable, "=", round(mean.vp.pa.model$Mean, 2)),
+  mean.vp.pa.model$variable)
+
+# Plot
+vp.pa.model.plot.occurrence <- ggplot(t.vp.pa.model, aes(x = variable, y = value, fill = variable)) +
+  geom_violin(scale = "width", show.legend = TRUE, linewidth = 0.25) +
+  stat_summary(fun = mean, geom = "point", size = 1, show.legend = FALSE, color = "black") +
+  geom_vline(xintercept = length(fixed.variables$variable) + 0.5, linetype = "dashed") +  # Separate fixed and random
+  annotate("text", x = c(length(fixed.variables$variable) / 2, length(fixed.variables$variable) + 1.5), 
+           y = c(0.9, 0.9), label = c("Fixed", "Random"), size = 3) +
+  scale_y_continuous(
+    limits = c(0, 1.00),
+    breaks = seq(0, 1.00, by = 0.10)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Random..site" = "firebrick3",
+      "Random..year" = "lightcoral",
+      "Mixed_Layer_Depth" = "purple",
+      "Sea_Ice" = "yellow2",
+      "Depth" = "orange",
+      "SBS" = "green3",
+      "SBS_seasonality" = "green3",
+      "SST" = "cornflowerblue",
+      "SBT" = "cornflowerblue",
+      "SST_seasonality" = "cornflowerblue",
+      "SBT_seasonality" = "cornflowerblue"
+    ),
+    limits = levels(t.vp.pa.model$variable),  # Use reordered factor levels
+    labels = legend.labels  # Use dynamic labels
+  ) +
+  scale_x_discrete(
+    labels = c(
+      "Random..site" = "Random Site",
+      "Random..year" = "Random Year",
+      "Mixed_Layer_Depth" = "Mixed Layer Depth",
+      "Sea_Ice" = "Sea Ice",
+      "Depth" = "Depth (Logged)",
+      "SBS" = "SBS",
+      "SBS_seasonality" = "SBS Seasonality",
+      "SST" = "SST",
+      "SBT" = "SBT",
+      "SST_seasonality" = "SST Seasonality",
+      "SBT_seasonality" = "SBT Seasonality"
+    )
+  ) +
+  labs(
+    y = "Proportion of explained variation",
+    x = NULL,
+    title = NULL
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8),
+    axis.text.y = element_text(size = 6),
+    axis.title.y = element_text(size = 8),
+    axis.title.x = element_blank(),
+    plot.title = element_text(size = 10, hjust = 0.5),
+    plot.margin = margin(0, 20, 0, 2),
+    panel.grid.major = element_line(color = "lightgray", size = 0.25),
+    panel.grid.minor = element_blank(),
+    legend.position = "right",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 6),
+    legend.key.size = unit(0.4, "cm")
+  )
+vp.pa.model.plot.occurrence
+ggsave("variance.paritioning.all.occurrence.tiff", plot=vp.pa.model.plot.occurrence, device="tiff", width=15, height=9, units="cm", dpi=300)
+print("variance partitioning plot saved") 
+
+
+
+
+
+# Figure 3. Beta PCA ----------------------------------------------------
+# Extract posterior means of beta parameters
+beta = getPostEstimate(pa.model, "Beta")
+beta.matrix <- t(beta$mean)  # Transpose beta matrix
+colnames(beta.matrix) <- pa.model$covNames  # Assign species names to columns
+rownames(beta.matrix) <- pa.model$spNames  # Assign covariate names to rows
+beta.matrix <- beta.matrix[, colnames(beta.matrix) != "(Intercept)"]  # Remove intercept column
+
+# Perform PCA on the beta matrix
+beta.pca <- prcomp(beta.matrix, scale. = TRUE)
+pca.scores <- beta.pca$x  # PCA scores for species
+summary(beta.pca)  # Variance explained by each PC
+screeplot(beta.pca, type = "lines")
+
+# Merge PCA scores with species classification
+species.regions <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
+  dplyr::select(species, biogeographic.affinity) %>%
+  rename(region = biogeographic.affinity) %>%
+  mutate(region = case_when(
+    species == "Phycis blennoides" ~ "B",
+    species == "Lycenchelys muraena" ~ "A",
+    species == "Lycenchelys sarsii" ~ "B",
+    species == "Lycodes paamiuti" ~ "AB",
+    TRUE ~ region
+  ))
+write.table(species.regions, "species.regions.csv", sep = ";", row.names = FALSE, quote = TRUE)
+
+pca.data <- data.frame(pca.scores, species = rownames(pca.scores)) %>%
+  left_join(species.regions, by = "species") %>%
+  mutate(region = case_when(
+    species == "Phycis blennoides" ~ "B",
+    species == "Lycenchelys muraena" ~ "A",
+    species == "Lycenchelys sarsii" ~ "B",
+    species == "Lycodes paamiuti" ~ "AB",
+    TRUE ~ region
+  ))
+
+# Extract and scale loadings
+scaling.factor <- 0.5 * max(abs(pca.data$PC1), abs(pca.data$PC2))  # Scale based on plot range
+loadings <- as.data.frame(beta.pca$rotation) %>%
+  mutate(
+    variable = rownames(beta.pca$rotation),
+    PC1 = PC1 * scaling.factor,
+    PC2 = PC2 * scaling.factor
+  )
+
+# Highlight certain species
+species.to.label <- c("Gadus morhua", "Mallotus villosus","Leptagonus decagonus",
+                      "Boreogadus saida", "Hippoglossus hippoglossus", "Melanogrammus aeglefinus", 
+                      "Pollachius virens", "Reinhardtius hippoglossoides",
+                      "Liparis fabricii", "Amblyraja hyperborea", "Triglops nybelini", 
+                      "Chimaera monstrosa", "Argentina silus", "Phycis blennoides",
+                      "Molva molva", "Sebastes viviparus", "Gymnocanthus tricuspis",
+                      "Lycodes paamiuti", 'Paraliparis bathybius', "Lumpenus lampretaeformis",
+                      "Anarhichas lupus", "Microstomus kitt", "Pleuronectes platessa",
+                      "Gaidropsarus argentatus", "Gadiculus argenteus", "Eumicrotremus spinosus")  # Occurrence
+
+species.to.label <- c("Gadus morhua", "Mallotus villosus","Leptagonus decagonus",
+                      "Boreogadus saida", "Hippoglossus hippoglossus", "Melanogrammus aeglefinus", 
+                      "Pollachius virens", "Reinhardtius hippoglossoides",
+                      "Liparis fabricii", "Amblyraja hyperborea", "Triglops nybelini", 
+                      "Chimaera monstrosa", "Argentina silus", "",
+                      "Molva molva", "Sebastes viviparus", "Gymnocanthus tricuspis",
+                      "Lycodes paamiuti", "Lumpenus lampretaeformis", "Gaidropsarus argentatus", 
+                      "Gadiculus argenteus", "Trisopterus esmarkii", "Micromesistius poutassou",
+                      "Hippoglossoides platessoides", "Eumicrotremus derjugini")  # Abundace
+
+pca.data$label <- ifelse(pca.data$species %in% species.to.label, pca.data$species, NA)
+
+# Plot
+pca <- ggplot(pca.data, aes(x = PC1, y = PC2, color = region)) +
+  geom_point(size = 2) +
+  geom_segment(data = loadings, aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.2, "cm")), color = "black") +
+  geom_text_repel(data = loadings, aes(x = PC1, y = PC2, label = variable),
+                  size = 3, color = "black", max.overlaps = 20) +
+  geom_text_repel(aes(label = label, color = region), fontface = "italic", size = 3) +
+  scale_color_manual(
+    values = c("A" = "dodgerblue", "B" = "red2", "AB" = "green2"),
+    labels = c("A" = "Arctic", "B" = "Boreal", "AB" = "Arcto-Boreal"),
+    name = "Biogeographical\nGroup"
+  ) +
+  theme_classic() +
+  labs(
+    x = paste0("PC 1 (", round(summary(beta.pca)$importance[2, 1] * 100, 1), "%)"),
+    y = paste0("PC 2 (", round(summary(beta.pca)$importance[2, 2] * 100, 1), "%)"),
+    color = "Region"
+  )
+pca
+ggsave("pca.abundance.tiff", plot = pca, device = "tiff", width = 25, height = 20, units = "cm", dpi = 300)
+
+# Identify outliers
+pca.scores.outliers <- as.data.frame(pca.scores) %>%
+  mutate(species = rownames(pca.scores)) %>%
+  arrange(desc(abs(PC1)))  # Sort by absolute PC1 scores
+outliers <- pca.scores.outliers[1:2, ]  # Top 2 outliers
+print(outliers)
+
+
+
+
+
+# Figure 4. Trait mediation ----------------------------------------------------
+# Prepare data for plotting
+env.traits <- as.data.frame(vp.pa.model$R2T$Beta[-1]) %>%
+  rename(value = "vp.pa.model$R2T$Beta[-1]") %>%
+  mutate(
+    Environment = factor(
+      c("log_depth", "SST", "SBT", "SBS", "SST_seasonality", 
+        "SBT_seasonality", "SBS_seasonality", "mixed_layer", "sea_ice")
+    ),
+    value = round(value * 100, 0) 
+  ) %>%
+  arrange(desc(value))  # Sort by value in descending order
+
+# Reorder the environment factor based on sorted values
+env.traits$Environment <- factor(env.traits$Environment, levels = env.traits$Environment)
+
+# Plot
+env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = Environment)) +
+  geom_bar(stat = "identity", color = "black", linewidth = 0.25) +  # Barplot with black borders
+  geom_text(aes(label = value), vjust = -0.5, size = 2) +  # Add text above each bar
+  scale_fill_manual(values = c(
+    "Random..site" = "firebrick3",
+    "Random..year" = "lightcoral",
+    "mixed_layer" = "purple",
+    "sea_ice" = "yellow2",
+    "log_depth" = "orange",
+    "SBS" = "green3",
+    "SBS_seasonality" = "green3",
+    "SST" = "cornflowerblue",
+    "SBT" = "cornflowerblue",
+    "SST_seasonality" = "cornflowerblue",
+    "SBT_seasonality" = "cornflowerblue"
+  )) +
+  scale_x_discrete(
+    labels = c(
+      "mixed_layer" = "Mixed Layer Depth",
+      "sea_ice" = "Sea Ice",
+      "log_depth" = "Depth (Logged)",
+      "SBS" = "SBS",
+      "SBS_seasonality" = "SBS Seasonality",
+      "SST" = "SST",
+      "SBT" = "SBT",
+      "SST_seasonality" = "SST Seasonality",
+      "SBT_seasonality" = "SBT Seasonality"
+    )
+  ) +
+  scale_y_continuous(
+    limits = c(0, 18),  # Set the range of the y-axis
+    breaks = seq(0, 18, by = 2)  # Set y-axis breaks
+  ) +
+  labs(
+    y = "Percentage",  # Add y-axis label
+    x = NULL  # Remove x-axis label
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.position = "none",  # Remove legend
+    panel.grid.major = element_line(color = "lightgray", size = 0.25),  # Add light gray grid lines
+    panel.grid.minor = element_blank()  # Remove minor grid lines
+  )
+env.traits.plot
+ggsave("env.explained.by.traits.occurrence.tiff", plot=env.traits.plot, device="tiff", width=10, height=9, units="cm", dpi=300)
+print("env.explained.variance.png")
+
+
+
+
+
+# Figure 5. Gamma heatmap ----------------------------------------------------
+# Extract and process gamma estimates
+gamma <- getPostEstimate(pa.model, "Gamma")
+temp.gamma <- as.data.frame(gamma$mean) %>%
+  rename(
+    "Maximum Body Size" = "V1",
+    "Trophic Level" = "V2",
+    "Fecundity (Logged)" = "V3"
+  ) %>%
+  mutate(param = pa.model$covNames) %>%
+  pivot_longer(
+    cols = -param, 
+    names_to = "trait", 
+    values_to = "value"
+  )
+
+# Process support values
+sup.gamma <- as.data.frame(gamma$support) %>%
+  mutate(param = pa.model$covNames) %>%
+  pivot_longer(
+    cols = -param, 
+    names_to = "species", 
+    values_to = "support"
+  )
+
+temp.gamma <- temp.gamma %>%
+  mutate(support = sup.gamma$support)
+
+# Add support level and classify positive/negative effects
+supportLevel <- 0.95
+temp.gamma <- temp.gamma %>%
+  mutate(
+    pos.neg = case_when(
+      support > supportLevel ~ "1",
+      support < (1 - supportLevel) ~ "-1",
+      TRUE ~ "0"
+    )
+  )
+
+# Rename and reorder variables
+temp.gamma <- temp.gamma %>%
+  filter(param != "(Intercept)") %>%
+  mutate(
+    param = recode(param,
+                   "SST" = "SST",
+                   "SBT" = "SBT",
+                   "SBS" = "SBS",
+                   "log_depth" = "Depth (Logged)",
+                   "ice_days" = "Sea Ice",
+                   "mixed_layer" = "Mixed Layer Depth",
+                   "SST_seasonality" = "SST Seasonality",
+                   "SBT_seasonality" = "SBT Seasonality",
+                   "SBS_seasonality" = "SBS Seasonality"
+    ),
+    trait = factor(trait, levels = c("Maximum Body Size", "Trophic Level", "Fecundity (Logged)")),
+    param = factor(param, levels = c(
+      "SST", "SBT", "SBS", "Depth (Logged)", "Sea Ice", 
+      "Mixed Layer Depth", "SST Seasonality", "SBT Seasonality", "SBS Seasonality"
+    )),
+    pos.neg = factor(pos.neg, levels = c("1", "0", "-1"))  # Ensure consistent legend order
+  )
+
+# Plot
+gamma.heatmap.occurrence <- ggplot(temp.gamma, aes(x = param, y = trait)) +
+  geom_tile(aes(fill = pos.neg), color = 'lightgray', linewidth = 0.25) +
+  scale_fill_manual(
+    values = c("1" = "red", "0" = "white", "-1" = "blue"),  # Map levels to colors
+    labels = c("1" = "+", "0" = "0", "-1" = "-"),           # Legend labels
+    name = "", 
+    guide = guide_legend(keyheight = 1, keywidth = 0.6),
+    drop = FALSE  # Ensure unused levels are not dropped
+  ) +
+  theme_classic() +
+  labs(y = NULL, x = NULL) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels
+    axis.text.y = element_text(size = 8),  # Y-axis tick label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.key.size = unit(0.4, "cm")  # Adjust legend key size
+  )
+gamma.heatmap.occurrence
+ggsave("gamma.heatmap.occurrence.tiff", plot=gamma.heatmap.occurrence, device="tiff", width=10, height=9, units="cm", dpi=300)
+
+
+
+
+
+# Figure 6. Predicted CWM and diversity ----------------------------------------------------
+
+
+
+
+
+# Supporting Information Figure 1. Variance partitioning ----------------------------------------------------
+# See script "03 Test for correlation among traits and environmental covariates"
+
+
+
+
+
+# Supporting Information Figure 2. Variance partitioning ----------------------------------------------------
+# See script "03 Test for correlation among traits and environmental covariates"
+
+
+
+
+
+# Supporting Information Figure 3. ESS and PSRF ----------------------------------------------------
+# See script "07 Check MCMC convergence"
+
+
+
+
+
+# Supporting Information Figure 4. Explanatory power ----------------------------------------------------
+# See script "08 Evaluate model fit"
+
+
+
+
+
+# Supporting Information Figure 5. Variance partitioning ----------------------------------------------------
+head(pa.model$X)
+pa.model$covNames
+
+# Specify groups of how the variation should be partitioned
+groupnames.vp.species.pa.model <- c("Depth", "Temperature", "Salinity", "Mixed Layer Depth", "Sea Ice") # Define the groups of variables
+groups.vp.species.pa.model <- c(1,1,2,2,3,2,2,3,4,5) # Assign each variable to a group)
+
+vp.species.pa.model <- computeVariancePartitioning(pa.model, group = groups.vp.species.pa.model, groupnames = groupnames.vp.species.pa.model)
+vp.species.pa.model <- data.frame(t(vp.species.pa.model$vals))
+
+vp.species.pa.model$Species <- rownames(vp.species.pa.model)
+vp.species.pa.model <- reshape2::melt(vp.species.pa.model %>% group_by(Species) %>%
+                              summarise(
+                                Depth = Depth,
+                                Temperature = Temperature,
+                                Salinity = Salinity,
+                                Mixed.Layer.Depth = Mixed.Layer.Depth,
+                                Sea.Ice = Sea.Ice,
+                                Random..site = Random..site,
+                                Random..year = Random..year),
+                            id = "Species")
+
+mean.vp.species.pa.model <- vp.species.pa.model %>%
+  group_by(variable) %>%
+  summarise(Mean = round(mean(value), 2))
+mean.vp.species.pa.model$variable <- gsub("Random..", "Random ", mean.vp.species.pa.model$variable)
+capitalize_words <- function(text) {
+  str_replace_all(text, "\\b[a-z]", ~toupper(.x))
+}
+mean.vp.species.pa.model$variable <- capitalize_words(mean.vp.species.pa.model$variable)
+mean.vp.species.pa.model$variable <- gsub("\\.", " ", mean.vp.species.pa.model$variable)
+mean.vp.species.pa.model[1, "variable"] <- "Depth (Logged)"
+
+mean.vp.species.pa.model$Text <- paste(mean.vp.species.pa.model$variable, "=", mean.vp.species.pa.model$Mean)
+mean.vp.species.pa.model.text <- as.data.frame(t(mean.vp.species.pa.model$Text))
+colnames(mean.vp.species.pa.model.text) <- c("Depth", "Temperature", "Salinity", "Mixed.Layer.Depth", "Sea.Ice", "Random..site", "Random..year")
+
+vp.species.pa.model$variable <- factor(vp.species.pa.model$variable, levels = c(
+  "Random..site", 
+  "Random..year",
+  "Mixed.Layer.Depth", 
+  "Sea.Ice", 
+  "Depth", 
+  "Salinity", 
+  "Temperature"
+))
+
+vp.species.pa.model.plot <- ggplot(vp.species.pa.model, aes(x = Species, y = value, fill = variable)) +
+  geom_bar(position = "fill", stat = "identity") +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 4),  # X-axis tick label size
+    axis.text.y = element_text(size = 4),  # Y-axis tick label size
+    axis.title.x = element_text(size = 6),  # X-axis label size
+    axis.title.y = element_text(size = 6),  # Y-axis label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+    legend.position = "right"
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Random..site" = "firebrick3",
+      "Random..year" = "lightcoral",
+      "Mixed.Layer.Depth" = "purple",
+      "Sea.Ice" = "yellow2",
+      "Depth" = "orange",
+      "Salinity" = "green3",
+      "Temperature" = "cornflowerblue"
+    ),
+    labels = c(
+      Random..site = paste0("", (mean.vp.species.pa.model.text$Random..site)),
+      Random..year = paste0("", (mean.vp.species.pa.model.text$Random..year)),
+      Mixed.Layer.Depth = paste0("", (mean.vp.species.pa.model.text$Mixed.Layer.Depth)),
+      Sea.Ice = paste0("", (mean.vp.species.pa.model.text$Sea.Ice)),
+      Depth = paste0("", (mean.vp.species.pa.model.text$Depth)),
+      Salinity = paste0("", (mean.vp.species.pa.model.text$Salinity)),
+      Temperature = paste0("", (mean.vp.species.pa.model.text$Temperature))
+    )
+  ) +
+  labs(
+    y = "Variance Proportion",
+    x = "Species",
+    fill = NULL, 
+    title = NULL
+  ) +
+  theme(axis.text.y = element_text(margin = margin(r = 0))) +
+  scale_y_continuous(expand = c(0, 0))
+vp.species.pa.model.plot
+ggsave("variance.paritioning.occurrence.tiff", plot=vp.species.pa.model.plot, device="tiff", width=15, height=9, units="cm", dpi=300)
+print("variance partitioning per species plot saved") 
+
+
+
+
+
+# Supplementary Figure 6. Beta heatmap ----------------------------------------------------
+library(ggtree)
+beta = getPostEstimate(pa.model, "Beta")
+# Remove edge lengths and plot the phylogenetic tree
+taxo.b <- taxo
+taxo.b$edge.length <- NULL  # Remove edge lengths
+tree_plot_a <- ggtree(taxo.b, branch.length = "none", ladderize = TRUE) + 
+  geom_tiplab(fontface = "italic", size = 2) + 
+  xlim(0.1, 22) +
+  theme(plot.margin = margin(0, 0, 0, 5))  # Adjust margins
+tree_plot_a
+
+# Extract and process beta mean and support values
+temp.beta <- as.data.frame(beta$mean) %>%
+  mutate(param = pa.model$covNames) %>%
+  pivot_longer(-param, names_to = "species", values_to = "value")
+sup.beta <- as.data.frame(beta$support) %>%
+  mutate(param = pa.model$covNames) %>%
+  pivot_longer(-param, names_to = "species", values_to = "support")
+
+# Combine mean and support data
+temp.beta <- temp.beta %>%
+  left_join(sup.beta, by = c("param", "species")) %>%
+  mutate(
+    pos.neg = case_when(
+      support > 0.95 ~ 1,
+      support < 0.05 ~ -1,
+      TRUE ~ 0
+    ),
+    pos.neg = factor(pos.neg, levels = c(1, 0, -1))  # Ensure consistent legend order
+  )
+
+# Rename environmental variables
+temp.beta <- temp.beta %>%
+  filter(param != "(Intercept)") %>%
+  mutate(
+    Environment = recode(param,
+                         "SST" = "SST",
+                         "SBT" = "SBT",
+                         "SBS" = "SBS",
+                         "log_depth" = "Depth (Logged)",
+                         "ice_days" = "Sea Ice",
+                         "mixed_layer" = "Mixed Layer Depth",
+                         "SST_seasonality" = "SST Seasonality",
+                         "SBT_seasonality" = "SBT Seasonality",
+                         "SBS_seasonality" = "SBS Seasonality"
+    ),
+    Environment = factor(Environment, levels = c(
+      "SST", "SBT", "SBS", "Depth (Logged)", "Sea Ice", 
+      "Mixed Layer Depth", "SST Seasonality", "SBT Seasonality", "SBS Seasonality"
+    ))
+  )
+
+# Set species order to match phylogenetic tree
+sp_order <- get_taxa_name(tree_plot_a)
+temp.beta <- temp.beta %>%
+  mutate(Species_sort = factor(species, levels = rev(sp_order)))
+
+# Heatmap for occurrence model
+beta.heatmap.occurrence <- ggplot(temp.beta, aes(x = Environment, y = Species_sort)) +
+  geom_tile(aes(fill=pos.neg),color='black')+
+  scale_fill_manual(values=c('red','white','blue'),
+                    labels = c('+','','-'), 
+                    name = '', 
+                    guide = guide_legend(keyheight = 1, 
+                                         keywidth = 0.6)) +
+  theme_bw()+
+  labs(y = NULL, x = NULL) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6),  # X-axis tick label size
+        axis.text.y = element_text(size = 4),  # Y-axis tick label size
+        axis.title.x = element_text(size = 6),  # X-axis label size
+        legend.title = NULL,
+        legend.text = element_text(size = 6),  # Legend text size
+        legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+        plot.title = NULL)
+
+# Heatmap for abundance model
+beta.heatmap.abundance <- ggplot(temp.beta, aes(x = Environment, y = Species_sort)) +
+  geom_tile(aes(fill=pos.neg),color='black')+
+  scale_fill_manual(values=c('red','white','blue'),
+                    labels = c('+','','-'), 
+                    name = '', 
+                    guide = guide_legend(keyheight = 1, 
+                                         keywidth = 0.6)) +
+  theme_bw()+
+  labs(y = NULL, x = NULL) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6),  # X-axis tick label size
+        axis.text.y = element_text(size = 4),  # Y-axis tick label size
+        axis.title.x = element_text(size = 6),  # X-axis label size
+        legend.title = NULL,
+        legend.text = element_text(size = 6),  # Legend text size
+        legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+        plot.title = NULL)
+
+# Combine Plots
+combined.beta.plot <- ggarrange(
+  tree_plot_a, 
+  beta.heatmap.nospecies.occurrence + theme(legend.position = "none"), 
+  beta.heatmap.nospecies.abundance, 
+  nrow = 1
+)
+
+# Save Plots
+ggsave("combined.beta.plot.pdf", plot = combined.beta.plot, device = "pdf", width = 20, height = 25, units = "cm", dpi = 300)
+
+
+
+
+
+# Supplementary Figure 7. Beta barplot ----------------------------------------------------
+# Combine temp.beta and species.regions
+beta.species.regions <- left_join(temp.beta, species.regions)
+
+# Group and summarize data
+beta.species.regions.b <- beta.species.regions %>%
+  group_by(Environment, pos.neg, region) %>%
+  count() %>%
+  mutate(pos.neg = case_when(
+    pos.neg == -1 ~ "-",  # Replace -1 with "-"
+    pos.neg == 0 ~ "0",   # Replace 0 with "0"
+    pos.neg == 1 ~ "+"    # Replace 1 with "+"
+  ))
+
+# Summarize across all regions 
+beta.species.regions.c <- beta.species.regions %>%
+  group_by(Environment, pos.neg) %>%
+  count() %>%
+  filter(pos.neg != "0")
+
+# Create the plot
+beta.region.pos.neg <- ggplot(beta.species.regions.b) +
+  geom_bar(
+    aes(x = pos.neg, y = n, fill = region),
+    position = "stack",
+    stat = "identity"
+  ) +
+  facet_grid(
+    ~ Environment, switch = "x",
+    labeller = as_labeller(c(
+      "SST" = "SST",
+      "SBT" = "SBT",
+      "SBS" = "SBS",
+      "Depth (Logged)" = "Depth\n(Logged)",
+      "Sea Ice" = "Sea Ice",
+      "Mixed Layer Depth" = "Mixed\nLayer Depth",
+      "SST Seasonality" = "SST\nSeasonality",
+      "SBT Seasonality" = "SBT\nSeasonality",
+      "SBS Seasonality" = "SBS\nSeasonality"
+    ))
+  ) +
+  scale_fill_manual(
+    values = c("A" = "dodgerblue", "B" = "red2", "AB" = "green2"),
+    labels = c("Arctic", "Arcto-Boreal", "Boreal")
+  ) +
+  scale_x_discrete(limits = c("+", "0", "-")) + 
+  scale_y_continuous(
+    limits = c(0, 65),  
+    breaks = seq(0, 65, by = 5) 
+  ) +
+  labs(
+    x = "Environment",
+    y = "Number of Species",
+    fill = "Region"
+  ) +
+  theme_classic() +
+  theme(
+    strip.placement = "outside",
+    strip.background = element_rect(fill = NA, color = "white"),
+    panel.spacing = unit(0, "cm"),
+    strip.text = element_text(size = 8), 
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.title.x = element_blank(),
+    legend.text = element_text(size = 6), 
+    legend.title = element_text(size = 6),
+    legend.key.size = unit(0.4, "cm"),
+    plot.title = element_blank(), 
+    panel.grid.major = element_line(color = "lightgray", size = 0.25),  # Add light gray major grid lines
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white", color = NA)  # Ensure a shared background
+  )
+
+ggsave("beta.region.pos.neg.occurrence.tiff", plot=beta.region.pos.neg.occurrence, device="tiff", width=25, height=10, units="cm", dpi=300)
+
+
+
+
+
+
+# Supplementary Figure 8. Species abundance ----------------------------------------------------
+
+
+
+
+
+# Supplementary Figure 9. Bray-Curits dissimilarity index ----------------------------------------------------
+
+
+
+
+
+# Supplementary Figure 10. Modeled environmental covariates from Copernicus ----------------------------------------------------
+
+
+
+
+
+
+
+
+# Extra, unused plots ----------------------------------------------------
+
+# 1. Beta heatmap for arctic, arcto-boreal, and boreal species ----------------
+# Process Species Regions
+species.list <- as.data.frame(colnames(species))
+traits.full <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
+  dplyr::select(species, biogeographic.affinity) %>%
+  dplyr::rename(region = biogeographic.affinity)
+
+# Join species list with traits and update specific species regions
+species.regions <- right_join(traits.full, species.list, by = c('species' = 'colnames(species)')) %>%
+  arrange(species) %>%
+  mutate(region = case_when(
+    species == "Phycis blennoides" ~ "B",
+    species == "Lycenchelys muraena" ~ "A",
+    species == "Lycenchelys sarsii" ~ "B",
+    species == "Lycodes paamiuti" ~ "AB",
+    TRUE ~ region
+  ))
+
+# Save species regions to a file
+write.table(species.regions, "species.regions.csv", sep = ";", row.names = FALSE, quote = TRUE)
+
+# Extract species groups
+species_groups <- species.regions$region
+species_groups.b <- as.data.frame(species_groups)
+
+# Define a Function to Process and Plot Beta for Each Group
+process_and_plot_beta <- function(group_name, species_groups, beta, pa_model, support_level = 0.95) {
+  # Filter species in the group
+  species_in_group <- which(species_groups == group_name)
+  
+  # Subset beta mean and support for the group
+  beta_group_mean <- beta$mean[, species_in_group]
+  beta_group_support <- beta$support[, species_in_group]
+  beta_group <- list(mean = beta_group_mean, support = beta_group_support)
+  
+  # Subset the pa.model for the group
+  pa_model_group <- pa_model
+  pa_model_group$Y <- pa_model$Y[, species_in_group]
+  pa_model_group$spNames <- pa_model$spNames[species_in_group]
+  
+  # Plot Beta for the group
+  plotBeta(
+    pa_model_group, beta_group, supportLevel = support_level, param = "Sign",
+    colors = colorRampPalette(c("blue", "white", "red")),
+    plotTree = TRUE, spNamesNumbers = c(TRUE, FALSE), covNamesNumbers = c(TRUE, FALSE),
+    cex = c(0.5, 0.4, 0.5),
+    marTree = c(6, 0, 1, 0), mgp = c(0, 1, 0), split = 0.6,
+    mar = c(6, 0, 1, 0)
+  )
+}
+
+
+# 2. Average beta response of each biogeographical group ----------------
+# Process and Plot for Each Group
+groups <- c("A", "B", "AB")
+for (group in groups) {
+  process_and_plot_beta(group, species_groups, beta, pa.model)
+}
+
+# Define a function to process beta group data
+process_beta_group <- function(beta_group, species_data, region_name) {
+  beta_group_df <- as.data.frame(beta_group)
+  rownames(beta_group_df) <- c("Intercept", "log_depth", "SST", "SBT", "SBS", 
+                               "SST_seasonality", "SBT_seasonality",
+                               "SBS_seasonality", "mixed_layer", "ice_days")
+  beta_group_df <- as.data.frame(t(beta_group_df))  # Transpose and convert to data frame
+  beta_group_df$species <- rownames(beta_group_df)
+  beta_group_df <- left_join(beta_group_df, species_data %>% filter(region == region_name), by = "species")
+  beta_group_df$region <- region_name
+  return(beta_group_df)
+}
+
+# Process each beta group
+beta.group.A.mean.b.t <- process_beta_group(beta.group.A.mean, species.regions, "A")
+beta.group.B.mean.b.t <- process_beta_group(beta.group.B.mean, species.regions, "B")
+beta.group.AB.mean.b.t <- process_beta_group(beta.group.AB.mean, species.regions, "AB")
+
+# Combine all regions into one data frame
+beta.mean.regions <- bind_rows(beta.group.A.mean.b.t, beta.group.B.mean.b.t, beta.group.AB.mean.b.t)
+
+# Remove intercept and calculate mean and SD for each region
+beta.mean.sd.regions <- beta.mean.regions %>%
+  dplyr::select(-Intercept) %>%
+  group_by(region) %>%
+  summarise(across(where(is.numeric), list(mean = mean, sd = sd))) %>%
+  pivot_longer(
+    cols = -region,
+    names_to = c("variable", "stat"),
+    names_pattern = "^(.*)_(mean|sd)$",
+    values_to = "value"
+  ) %>%
+  pivot_wider(names_from = stat, values_from = value)
+
+# Calculate total mean and SD across all regions
+beta.mean.sd.total <- beta.mean.regions %>%
+  dplyr::select(-region, -Intercept) %>%
+  summarise(across(where(is.numeric), list(mean = mean, sd = sd))) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = c("variable", "stat"),
+    names_pattern = "^(.*)_(mean|sd)$",
+    values_to = "value"
+  ) %>%
+  pivot_wider(names_from = stat, values_from = value) %>%
+  mutate(region = "Total")
+
+# Combine regional and total data
+beta.mean.sd.regions.total <- bind_rows(beta.mean.sd.total, beta.mean.sd.regions)
+
+# Reorder variables and regions
+desired_order <- c("SST", "SBT", "SBS", "log_depth", "ice_days", 
+                   "mixed_layer", "SST_seasonality", "SBT_seasonality", "SBS_seasonality")
+beta.mean.sd.regions.total <- beta.mean.sd.regions.total %>%
+  mutate(
+    variable = factor(variable, levels = desired_order),
+    region = factor(region, levels = c("A", "B", "AB", "Total"))
+  )
+
+# Filter for SBS seasonality (if needed)
+beta.mean.sd.regions.SBS.season <- beta.mean.sd.regions.total %>%
+  filter(variable == "SBS_seasonality")
+
+# Plot the data
+beta.regions.avg.response.occurrence <- ggplot(beta.mean.sd.regions.total, aes(x = variable, y = mean, color = region)) +
+  geom_point(size = 2, position = position_dodge(width = 0.8), show.legend = TRUE) +
+  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), 
+                width = 0.15, 
+                position = position_dodge(width = 0.8)) +
+  scale_color_manual(
+    values = c("A" = "blue", "B" = "red", "AB" = "purple", "Total" = "green"),
+    labels = c("Arctic", "Boreal", "Arcto-Boreal", "Total")
+  ) +
+  scale_x_discrete(
+    labels = c(
+      "mixed_layer" = "Mixed Layer Depth",
+      "ice_days" = "Sea Ice",
+      "log_depth" = "Depth (Logged)",
+      "SBS" = "SBS",
+      "SBS_seasonality" = "SBS Seasonality",
+      "SST" = "SST",
+      "SBT" = "SBT",
+      "SST_seasonality" = "SST Seasonality",
+      "SBT_seasonality" = "SBT Seasonality"
+    )
+  ) +
+  labs(
+    y = "Mean of species' beta responses",
+    color = "Region"
+  ) +
+  theme_minimal() +
+  coord_cartesian(ylim = c(-5, 5)) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+    axis.text.x.top = element_blank(),
+    axis.text.y = element_text(size = 6),
+    axis.title.y = element_text(size = 8, hjust = 0.8),
+    axis.title.x = element_blank(),
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 6),
+    legend.key.size = unit(0.4, "cm"),
+    plot.title = NULL
+  )
+# Save the plot
+ggsave("beta.regions.avg.response.occurrence.tiff", plot = beta.regions.avg.response.occurrence, device = "tiff", width = 18, height = 9, units = "cm", dpi = 300)
+       
+# 3. Beta response counts of each biogeographical group ----------------       
+# Split data into groups
+temp.beta.regions <- left_join(temp.beta, species.regions, by = "species")
+beta.groups <- temp.beta.regions %>%
+  group_split(region)  # Automatically splits data by region
+
+# Define a function to create plots
+create_plot <- function(data) {
+  plot <- ggplot(data, aes(x = Environment, fill = pos.neg)) + 
+    geom_bar(color = "black", linewidth = 0.25) +
+    scale_fill_manual(
+      values = c('red', 'white', 'blue'),
+      labels = c('+', '', '-'),
+      name = '',
+      guide = guide_legend(keyheight = 1, keywidth = 0.6)
+    ) +
+    labs(
+      y = "Number of species",
+      x = NULL
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 0.8, size = 8),
+      axis.text.y = element_text(size = 6),
+      axis.title.x = element_text(size = 8),
+      axis.title.y = element_text(size = 8),
+      legend.title = NULL,
+      legend.text = element_text(size = 6),
+      legend.key.size = unit(0.4, "cm"),
+      plot.title = NULL
+    )
+  
+  return(plot)  # Return the plot
+}
+
+# Create and view plots for each region
+plot_all <- create_plot(temp.beta)
+plot_A <- create_plot(beta.groups[[1]])
+plot_AB <- create_plot(beta.groups[[2]])
+plot_B <- create_plot(beta.groups[[3]])
+
+# End script "09 Plots"
