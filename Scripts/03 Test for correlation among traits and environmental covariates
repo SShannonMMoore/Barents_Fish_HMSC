@@ -1,0 +1,226 @@
+## Check correlation among traits
+traits.correlation <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
+  dplyr::select(species, max.body.size, fecundity, trophic.level) %>%
+                # egg.diameter.mean, longevity, age.at.maturity,
+                # length.at.maturity, parental.care,
+                # body.shape) %>%
+  mutate(log_fecundity = log(fecundity)) %>%
+  dplyr::select(-fecundity) 
+
+    # Prep data for correlation analysis
+        #Tr.fish.cor <- na.omit(Tr.fish)
+        Tr.fish.cor <- traits.correlation
+        # Tr.fish.cor$bearer <- ifelse(Tr.fish.cor$parental.care == "bearer", 1,0)
+        # Tr.fish.cor$guarder <- ifelse(Tr.fish.cor$parental.care == "guarder", 1,0)
+        # Tr.fish.cor$hider <- ifelse(Tr.fish.cor$parental.care == "hiders", 1,0)
+        # Tr.fish.cor$nonguarder <- ifelse(Tr.fish.cor$parental.care == "non-guarder", 1,0)
+        # 
+        # Tr.fish.cor$eel.like <- ifelse(Tr.fish.cor$body.shape == "eel-like", 1,0)
+        # Tr.fish.cor$elongated <- ifelse(Tr.fish.cor$body.shape == "elongated", 1,0)
+        # Tr.fish.cor$flat <- ifelse(Tr.fish.cor$body.shape == "flat", 1,0)
+        # Tr.fish.cor$fusiform <- ifelse(Tr.fish.cor$body.shape == "fusiform", 1,0)
+        # Tr.fish.cor$deep.short <- ifelse(Tr.fish.cor$body.shape == "deep/short", 1,0)
+
+        Tr.fish.cor <- Tr.fish.cor %>%
+            #dplyr::select(-egg.diameter.mean) %>%
+            #dplyr::select(-longevity) %>%
+            #dplyr::select(-age.at.maturity) %>%
+            #dplyr::select(-parental.care) %>%
+            #dplyr::select(-biogeographic.affinity) %>%
+            #dplyr::select(-body.shape) %>%
+            dplyr::select(-species)
+
+        is.numeric(Tr.fish.cor)
+        Tr.fish.cor <- na.omit(Tr.fish.cor)
+        head(Tr.fish.cor)
+
+    # See if traits are normally distributed
+        # If yes, use Pearson
+        # If no, use Spearman
+        # Egg diameter
+            hist(Tr.fish.cor$egg.diameter.mean)
+                # Not normal distribution (many with smaller eggs)
+        # Fecundity
+            hist(Tr.fish.cor$log_fecundity)
+                # Not normal distribution (many with few eggs)
+        # Max length
+            hist(Tr.fish.cor$max.body.size)
+                # Not normal distribution (many with smaller length)
+        # Longevity
+            hist(Tr.fish.cor$longevity)
+                # Not normal (many with lower longevity)
+        # Age at maturity
+            hist(Tr.fish.cor$age.at.maturity)
+                # Not normal (many with lower age at maturity)
+        # Length at maturity
+            hist(Tr.fish.cor$length.at.maturity)
+                # Not normal (many with lower length at maturity)
+        # Trophic level
+            hist(Tr.fish.cor$trophic.level)
+                # Normal-ish
+        # Spawning type
+            counts <- table(Tr.fish.cor$parental.care)
+            barplot(counts)
+        # # Biogeographic affinity
+        #     counts <- table(Tr.fish.cor$biogeographic.affinity)
+        #     barplot(counts)
+        # Body shape
+            counts <- table(Tr.fish.cor$body.shape)
+            barplot(counts)
+    # Remove traits that have been created into multiple new traits
+        Tr.fish.cor <- Tr.fish.cor %>%
+            dplyr::select(-body.shape) %>%
+            dplyr::select(-parental.care)
+    # Map out correlations
+        traits.cor.pearson <- cor(Tr.fish.cor, method = "pearson", use = "complete.obs")
+        traits.cor.pearson.plot <- ggcorrplot(traits.cor.pearson, show.diag = T, hc.order = F, type = "lower", legend.title = "Correlation",
+                  outline.color = "lightgrey", lab = TRUE, digits = 2) +
+                  scale_fill_stepsn(name = "Correlation", breaks = c(-1, -0.7, 0.7, 1), limits = c(-1, 1), show.limits = T,
+                            colours = c('blue','white','red'))
+        traits.cor.pearson.plot
+        print("Traits correlation Pearson plot saved")
+
+        tiff("traits.cor.spearman.tiff", width=8, height=6, units="cm", res=300)
+        traits.cor.spearman <- cor(Tr.fish.cor, method = "spearman", use = "complete.obs")
+        # traits.cor.pearson.color <- scale_fill_gradient2(low = "blue", mid = "white", high = "red",
+        #                           midpoint = 0)
+        traits.cor.spearman.plot <- ggcorrplot(traits.cor.spearman, 
+                                               show.diag = T, 
+                                               hc.order = F, 
+                                               type = "lower", 
+                                               legend.title = "Correlation",
+                                               outline.color = "lightgrey", 
+                                               lab = TRUE,
+                                               digits = 2,
+                                               lab_size = 2.5) +
+          scale_fill_stepsn(name = "Correlation", 
+                            breaks = c(-1, -0.7, 0.7, 1), 
+                            limits = c(-1, 1), 
+                            show.limits = T,
+                            colours = c('blue','white','red')) +
+          theme(axis.text.x = element_text(size = 8, angle = 45, hjust = 1), 
+                axis.text.y = element_text(size = 8), 
+                axis.title = element_text(size = 8), 
+                legend.title = element_text(size = 8), 
+                legend.text = element_text(size = 8), 
+                legend.key.size = unit(0.4, "cm"))      
+        
+        # png("traits.cor.spearman.plot.png", type = "cairo", res = 300)
+        par(mar = c(0, 0, 0, 0))
+        traits.cor.spearman.plot
+        dev.off()
+        print("Traits correlation Spearman plot saved")
+
+
+## Check correlation among env covariates
+    # Prep data for correlation analysis
+        load("HMSC_occurrence_1n")
+        env.cor <- environment
+        env.cor$ice_days <- as.numeric(env.cor$ice_days)
+
+    # See if env variables are normally distributed
+        # If yes, use Pearson
+        # If no, use Spearman
+
+    # SST
+        hist(env.cor$SST)
+            # Normal-ish
+    # SBT
+        hist(env.cor$SBT)
+            # Normal-ish
+    # SSS
+        hist(env.cor$SSS)
+            # Not normal
+        hist(log(env.cor$SSS))
+            # Not normal
+    # SBS
+        hist(env.cor$SBS)
+            # Normal-ish
+    # Depth
+        hist(env.cor$log_depth)
+            # Normal-ish
+    # Sea Ice Concentration
+        hist(env.cor$ice_days)
+            # Not normal
+        hist(log(env.cor$ice_days))
+            # Normal-ish
+    # Mixed Layer Depth
+        hist(env.cor$mixed_layer)
+            # Normal-ish
+    # SST Seasonality
+        hist(env.cor$SST_seasonality)
+            # Normal-ish
+    # SBT Seasonality
+        hist(env.cor$SBT_seasonality)
+            # Not normal
+        hist(log(env.cor$SBT_seasonality))
+            # Normal-ish
+    # SSS Seasonality
+        hist(env.cor$SSS_seasonality)
+            # Not normal
+        hist(log(env.cor$SSS_seasonality))
+            # Normal-ish
+    # SBS Seasonality
+        hist(env.cor$SBS_seasonality)
+            # Not normal
+        hist(log(env.cor$SBS_seasonality))
+            # Normal-ish
+
+# # Map out correlation
+    # Calculate correlation coefficients
+        env.cor.pearson <- cor(env.cor, method = "pearson", use = "complete.obs")
+    # Plot correlation coefficients
+        #tiff("env.cor.pearson.tiff", width=20, height=14, units="cm", res=300)
+        env.cor.pearson <- cor(env.cor, method = "pearson", use = "complete.obs")
+        env.cor.pearson.plot <- ggcorrplot(env.cor.pearson, 
+                                           show.diag = T, 
+                                           hc.order = F, 
+                                           type = "lower", 
+                                           legend.title = "Correlation",
+                                           outline.color = "lightgrey", 
+                                           lab = TRUE,
+                                           digits = 2,
+                                           lab_size = 2.5) +
+          scale_fill_stepsn(name = "Correlation", 
+                            breaks = c(-1, -0.8, 0.8, 1), 
+                            limits = c(-1, 1), 
+                            show.limits = T,
+                            colours = c('blue','white','red')) +
+          theme(axis.text.x = element_text(size = 8, angle = 45, hjust = 1), 
+                axis.text.y = element_text(size = 8), 
+                axis.title = element_text(size = 8), 
+                legend.title = element_text(size = 8), 
+                legend.text = element_text(size = 8), 
+                legend.key.size = unit(0.4, "cm"))      
+        par(mar = c(0, 0, 0, 0))
+        env.cor.pearson.plot
+        ggsave("env.cor.pearson.plot.tiff", plot=env.cor.pearson.plot, device="tiff", width=15, height=9, units="cm", dpi=300)
+        print("Env correlation Pearson plot saved")
+
+        library(ggcorrplot)
+        env.cor.color <- scale_fill_gradient2(low = "blue", mid = "white", high = "red",
+                              midpoint = 0)
+        env.cor.pearson.plot <- ggcorrplot(env.cor.pearson,
+              outline.color = "black",
+              lab = TRUE, type = "lower") +
+              ggtitle("Env Correlation Pearson Plot")
+        #png("env.cor.pearson.plot.png", type = "cairo", res = 300)
+        par(mar = c(2, 2, 2, 2))
+        env.cor.pearson.plot
+            # SST + days of ice significantly negatively related
+            # Variable least correlated with other covariates is kept
+        #dev.off()
+        print("Environmental correlation Pearson plot saved")
+
+    # Calculate correlation coefficients
+        env.cor.spearman <- cor(env.cor, method = "spearman", use = "complete.obs")
+    # Plot correlation coefficients
+        env.cor.spearman <- cor(env.cor.spearman, method = "spearman", use = "complete.obs")
+        env.cor.spearman.plot <- ggcorrplot(env.cor.spearman, show.diag = T, hc.order = F, type = "lower", legend.title = "Correlation",
+                  outline.color = "lightgrey", lab = TRUE, digits = 2) +
+                  ggtitle("Env Correlation Spearman Plot") +
+                  scale_fill_stepsn(name = "Correlation", breaks = c(-1, -0.8, 0.8, 1), limits = c(-1, 1), show.limits = T,
+                            colours = c('blue','white','red'))
+        env.cor.spearman.plot
+        print("Env correlation Spearman plot saved")
+
