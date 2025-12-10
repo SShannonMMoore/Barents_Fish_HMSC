@@ -1,0 +1,22 @@
+# Supplementary Tables
+load("traits.used.csv")
+load("species.regions.csv")
+traits.used.regions <- right_join(traits.used, species.regions, by = c('species'='species'))
+write.table(traits.used.regions, "traits.used.regions.csv", sep = ";", row.names = FALSE, quote = TRUE)
+
+load("environment")
+environment.summary[] <- lapply(environment, as.numeric)
+environment.summary <- as.data.frame(t(environment.summary))
+environment.summary <- environment.summary %>%
+  rownames_to_column("environmental_covariate") 
+environment.summary.b <- environment.summary %>%
+  rowwise() %>%
+  mutate(
+    row_min = min(c_across(starts_with("V")), na.rm = TRUE),   # Row min
+    row_max = max(c_across(starts_with("V")), na.rm = TRUE),   # Row max
+    row_mean = mean(c_across(starts_with("V")), na.rm = TRUE),  # Row mean
+    row_sd = sd(c_across(starts_with("V")), na.rm = TRUE)      # Row standard deviation
+  ) %>%
+  ungroup() %>%
+  dplyr::select(environmental_covariate, row_min, row_max, row_mean, row_sd) 
+write.table(environment.summary.b, "environment.summary.csv", sep = ";", row.names = FALSE, quote = TRUE)
