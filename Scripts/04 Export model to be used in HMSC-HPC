@@ -1,0 +1,20 @@
+# Set path to libraries
+.libPaths("/cluster/work/users/smo120/hmsc-hpc-dir/r-libraries")
+
+# Load libraries
+library("Hmsc")
+library("jsonify")
+
+load("occurrence_model_1o")
+
+thin = 100 # interval of iterations per samples
+nSamples = 250 # number of samples taken per chain
+nChains = 4
+verbose = 100
+transient = nSamples * thin
+
+init_obj = sampleMcmc(model_structure, samples=nSamples, thin=thin,
+                                            transient=transient, nChains=nChains,
+                                            verbose=verbose, engine="HPC")
+init_file_path = file.path(getwd(), "init_file_1o.rds")
+saveRDS(to_json(init_obj), file=init_file_path)
