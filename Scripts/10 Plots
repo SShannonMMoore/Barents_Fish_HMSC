@@ -29,23 +29,44 @@ library(rnaturalearthdata)
 library(vegan)
 library(readr)
 library(ggOceanMaps)
+library(ggtree)
+
+
+# Install required packages
+install.packages(c(
+  "Hmsc", "tibble", reshape2", "tidyr", "ggplot2", "ggrepel", 
+  "ggtree", "ape", "stringr", "grid"
+))
+# Load required packages
+library(Hmsc)
+library(tibble)
+library(reshape2)
+library(tidyr)
+library(ggplot2)
+library(ggrepel)
+library(ggtree)
+library(ape)
+library(stringr)
+library(grid)
+
+
 
 # Load model
-load("occurrence_model_1o_processed")
-load("HMSC_occurrence_1o")
+load("occurrence_model_processed")
+load("HMSC_occurrence")
 print("loaded")
-pa.model <- occurrence_model_1o_processed
-mpost.pa.model= convertToCodaObject(pa.model)
+occurrence.model <- occurrence_model_processed
+mpost.occurrence.model= convertToCodaObject(occurrence.model)
 
 
 
 
-vp.pa.model$R2T$Beta
+vp.occurrence.model$R2T$Beta
 
-vp.pa.model$R2T$Y
+vp.occurrence.model$R2T$Y
 # The proportion of variance in the species' responses explained by the model
 
-mean(vp.pa.model$R2T$Beta[-1])
+mean(vp.occurrence.model$R2T$Beta[-1])
 # How much do traits mediate the response to the environment 
 
 
@@ -78,17 +99,17 @@ ggsave("sampling.bathymetry.map.tiff", plot=sampling.bathymetry.map, device="tif
 
 # Figure 2. Proportion of variation ----------------------------------------------------
 # Specify groups of how the variation should be partitioned
-groupnames.vp.pa.model = c("Depth","SST","SBT","SBS","Mixed_Layer_Depth", "SST_seasonality", "SBT_seasonality", "SBS_seasonality", "Sea_Ice")
-group.vp.pa.model = c(1,1,2,3,4,5,6,7,8,9)
+groupnames.vp.occurrence.model = c("Depth","SST","SBT","SBS","Mixed_Layer_Depth", "SST_seasonality", "SBT_seasonality", "SBS_seasonality", "Sea_Ice")
+group.vp.occurrence.model = c(1,1,2,3,4,5,6,7,8,9)
 
 # Compute species-specific variance partitioning
-vp.pa.model <- computeVariancePartitioning(pa.model, group = group.vp.pa.model, groupnames = groupnames.vp.pa.model)
+vp.occurrence.model <- computeVariancePartitioning(occurrence.model, group = group.vp.occurrence.model, groupnames = groupnames.vp.occurrence.model)
 
 # Transform variance partitioning results into a data frame and reshape for plotting
-t.vp.pa.model <- data.frame(t(vp.pa.model$vals))
-t.vp.pa.model$Species <- rownames(t.vp.pa.model)
+t.vp.occurrence.model <- data.frame(t(vp.occurrence.model$vals))
+t.vp.occurrence.model$Species <- rownames(t.vp.occurrence.model)
 
-t.vp.pa.model <- reshape2::melt(t.vp.pa.model %>%
+t.vp.occurrence.model <- reshape2::melt(t.vp.occurrence.model %>%
                                   group_by(Species) %>%
                                   summarise(
                                     Depth = Depth,
@@ -105,31 +126,31 @@ t.vp.pa.model <- reshape2::melt(t.vp.pa.model %>%
                                 id = "Species")
 
 # Separate fixed and random variables
-mean.vp.pa.model <- t.vp.pa.model %>%
+mean.vp.occurrence.model <- t.vp.occurrence.model %>%
   group_by(variable) %>%
   summarise(Mean = mean(value, na.rm = TRUE)) %>%
   mutate(
     Type = ifelse(variable %in% c("Random..site", "Random..year"), "Random", "Fixed")
   )
-fixed.variables <- mean.vp.pa.model %>%
+fixed.variables <- mean.vp.occurrence.model %>%
   filter(Type == "Fixed") %>%
   arrange(desc(Mean))  # Order fixed variables by decreasing mean
-random.variables <- mean.vp.pa.model %>%
+random.variables <- mean.vp.occurrence.model %>%
   filter(Type == "Random")  # Keep random variables as is
 
 # Combine fixed and random variables
 final.order <- c(fixed.variables$variable, random.variables$variable)
 
 # Reorder the variables
-t.vp.pa.model$variable <- factor(t.vp.pa.model$variable, levels = final.order)
+t.vp.occurrence.model$variable <- factor(t.vp.occurrence.model$variable, levels = final.order)
 
 # Create a named vector for legend labels in the correct order
 legend.labels <- setNames(
-  paste(mean.vp.pa.model$variable, "=", round(mean.vp.pa.model$Mean, 2)),
-  mean.vp.pa.model$variable)
+  paste(mean.vp.occurrence.model$variable, "=", round(mean.vp.occurrence.model$Mean, 2)),
+  mean.vp.occurrence.model$variable)
 
 # Plot
-vp.pa.model.plot.occurrence <- ggplot(t.vp.pa.model, aes(x = variable, y = value, fill = variable)) +
+vp.occurrence.model.plot.occurrence <- ggplot(t.vp.occurrence.model, aes(x = variable, y = value, fill = variable)) +
   geom_violin(scale = "width", show.legend = TRUE, linewidth = 0.25) +
   stat_summary(fun = mean, geom = "point", size = 1, show.legend = FALSE, color = "black") +
   geom_vline(xintercept = length(fixed.variables$variable) + 0.5, linetype = "dashed") +  # Separate fixed and random
@@ -153,7 +174,7 @@ vp.pa.model.plot.occurrence <- ggplot(t.vp.pa.model, aes(x = variable, y = value
       "SST_seasonality" = "cornflowerblue",
       "SBT_seasonality" = "cornflowerblue"
     ),
-    limits = levels(t.vp.pa.model$variable),  # Use reordered factor levels
+    limits = levels(t.vp.occurrence.model$variable),  # Use reordered factor levels
     labels = legend.labels  # Use dynamic labels
   ) +
   scale_x_discrete(
@@ -191,8 +212,8 @@ vp.pa.model.plot.occurrence <- ggplot(t.vp.pa.model, aes(x = variable, y = value
     legend.text = element_text(size = 6),
     legend.key.size = unit(0.4, "cm")
   )
-vp.pa.model.plot.occurrence
-ggsave("variance.paritioning.all.occurrence.tiff", plot=vp.pa.model.plot.occurrence, device="tiff", width=15, height=9, units="cm", dpi=300)
+vp.occurrence.model.plot.occurrence
+ggsave("variance.paritioning.all.occurrence.tiff", plot=vp.occurrence.model.plot.occurrence, device="tiff", width=15, height=9, units="cm", dpi=300)
 print("variance partitioning plot saved") 
 
 
@@ -201,10 +222,10 @@ print("variance partitioning plot saved")
 
 # Figure 3. Beta PCA ----------------------------------------------------
 # Extract posterior means of beta parameters
-beta = getPostEstimate(pa.model, "Beta")
+beta = getPostEstimate(occurrence.model, "Beta")
 beta.matrix <- t(beta$mean)  # Transpose beta matrix
-colnames(beta.matrix) <- pa.model$covNames  # Assign species names to columns
-rownames(beta.matrix) <- pa.model$spNames  # Assign covariate names to rows
+colnames(beta.matrix) <- occurrence.model$covNames  # Assign species names to columns
+rownames(beta.matrix) <- occurrence.model$spNames  # Assign covariate names to rows
 beta.matrix <- beta.matrix[, colnames(beta.matrix) != "(Intercept)"]  # Remove intercept column
 
 # Perform PCA on the beta matrix
@@ -303,8 +324,8 @@ print(outliers)
 
 # Figure 4. Trait mediation ----------------------------------------------------
 # Prepare data for plotting
-env.traits <- as.data.frame(vp.pa.model$R2T$Beta[-1]) %>%
-  rename(value = "vp.pa.model$R2T$Beta[-1]") %>%
+env.traits <- as.data.frame(vp.occurrence.model$R2T$Beta[-1]) %>%
+  rename(value = "vp.occurrence.model$R2T$Beta[-1]") %>%
   mutate(
     Environment = factor(
       c("log_depth", "SST", "SBT", "SBS", "SST_seasonality", 
@@ -374,14 +395,14 @@ print("env.explained.variance.png")
 
 # Figure 5. Gamma heatmap ----------------------------------------------------
 # Extract and process gamma estimates
-gamma <- getPostEstimate(pa.model, "Gamma")
+gamma <- getPostEstimate(occurrence.model, "Gamma")
 temp.gamma <- as.data.frame(gamma$mean) %>%
   rename(
     "Maximum Body Size" = "V1",
     "Trophic Level" = "V2",
     "Fecundity (Logged)" = "V3"
   ) %>%
-  mutate(param = pa.model$covNames) %>%
+  mutate(param = occurrence.model$covNames) %>%
   pivot_longer(
     cols = -param, 
     names_to = "trait", 
@@ -390,7 +411,7 @@ temp.gamma <- as.data.frame(gamma$mean) %>%
 
 # Process support values
 sup.gamma <- as.data.frame(gamma$support) %>%
-  mutate(param = pa.model$covNames) %>%
+  mutate(param = occurrence.model$covNames) %>%
   pivot_longer(
     cols = -param, 
     names_to = "species", 
@@ -494,18 +515,18 @@ ggsave("gamma.heatmap.occurrence.tiff", plot=gamma.heatmap.occurrence, device="t
 
 
 # Supporting Information Figure 5. Variance partitioning ----------------------------------------------------
-head(pa.model$X)
-pa.model$covNames
+head(occurrence.model$X)
+occurrence.model$covNames
 
 # Specify groups of how the variation should be partitioned
-groupnames.vp.species.pa.model <- c("Depth", "Temperature", "Salinity", "Mixed Layer Depth", "Sea Ice") # Define the groups of variables
-groups.vp.species.pa.model <- c(1,1,2,2,3,2,2,3,4,5) # Assign each variable to a group)
+groupnames.vp.species.occurrence.model <- c("Depth", "Temperature", "Salinity", "Mixed Layer Depth", "Sea Ice") # Define the groups of variables
+groups.vp.species.occurrence.model <- c(1,1,2,2,3,2,2,3,4,5) # Assign each variable to a group)
 
-vp.species.pa.model <- computeVariancePartitioning(pa.model, group = groups.vp.species.pa.model, groupnames = groupnames.vp.species.pa.model)
-vp.species.pa.model <- data.frame(t(vp.species.pa.model$vals))
+vp.species.occurrence.model <- computeVariancePartitioning(occurrence.model, group = groups.vp.species.occurrence.model, groupnames = groupnames.vp.species.occurrence.model)
+vp.species.occurrence.model <- data.frame(t(vp.species.occurrence.model$vals))
 
-vp.species.pa.model$Species <- rownames(vp.species.pa.model)
-vp.species.pa.model <- reshape2::melt(vp.species.pa.model %>% group_by(Species) %>%
+vp.species.occurrence.model$Species <- rownames(vp.species.occurrence.model)
+vp.species.occurrence.model <- reshape2::melt(vp.species.occurrence.model %>% group_by(Species) %>%
                               summarise(
                                 Depth = Depth,
                                 Temperature = Temperature,
@@ -516,22 +537,22 @@ vp.species.pa.model <- reshape2::melt(vp.species.pa.model %>% group_by(Species) 
                                 Random..year = Random..year),
                             id = "Species")
 
-mean.vp.species.pa.model <- vp.species.pa.model %>%
+mean.vp.species.occurrence.model <- vp.species.occurrence.model %>%
   group_by(variable) %>%
   summarise(Mean = round(mean(value), 2))
-mean.vp.species.pa.model$variable <- gsub("Random..", "Random ", mean.vp.species.pa.model$variable)
+mean.vp.species.occurrence.model$variable <- gsub("Random..", "Random ", mean.vp.species.occurrence.model$variable)
 capitalize_words <- function(text) {
   str_replace_all(text, "\\b[a-z]", ~toupper(.x))
 }
-mean.vp.species.pa.model$variable <- capitalize_words(mean.vp.species.pa.model$variable)
-mean.vp.species.pa.model$variable <- gsub("\\.", " ", mean.vp.species.pa.model$variable)
-mean.vp.species.pa.model[1, "variable"] <- "Depth (Logged)"
+mean.vp.species.occurrence.model$variable <- capitalize_words(mean.vp.species.occurrence.model$variable)
+mean.vp.species.occurrence.model$variable <- gsub("\\.", " ", mean.vp.species.occurrence.model$variable)
+mean.vp.species.occurrence.model[1, "variable"] <- "Depth (Logged)"
 
-mean.vp.species.pa.model$Text <- paste(mean.vp.species.pa.model$variable, "=", mean.vp.species.pa.model$Mean)
-mean.vp.species.pa.model.text <- as.data.frame(t(mean.vp.species.pa.model$Text))
-colnames(mean.vp.species.pa.model.text) <- c("Depth", "Temperature", "Salinity", "Mixed.Layer.Depth", "Sea.Ice", "Random..site", "Random..year")
+mean.vp.species.occurrence.model$Text <- paste(mean.vp.species.occurrence.model$variable, "=", mean.vp.species.occurrence.model$Mean)
+mean.vp.species.occurrence.model.text <- as.data.frame(t(mean.vp.species.occurrence.model$Text))
+colnames(mean.vp.species.occurrence.model.text) <- c("Depth", "Temperature", "Salinity", "Mixed.Layer.Depth", "Sea.Ice", "Random..site", "Random..year")
 
-vp.species.pa.model$variable <- factor(vp.species.pa.model$variable, levels = c(
+vp.species.occurrence.model$variable <- factor(vp.species.occurrence.model$variable, levels = c(
   "Random..site", 
   "Random..year",
   "Mixed.Layer.Depth", 
@@ -541,7 +562,7 @@ vp.species.pa.model$variable <- factor(vp.species.pa.model$variable, levels = c(
   "Temperature"
 ))
 
-vp.species.pa.model.plot <- ggplot(vp.species.pa.model, aes(x = Species, y = value, fill = variable)) +
+vp.species.occurrence.model.plot <- ggplot(vp.species.occurrence.model, aes(x = Species, y = value, fill = variable)) +
   geom_bar(position = "fill", stat = "identity") +
   theme_classic() +
   theme(
@@ -565,13 +586,13 @@ vp.species.pa.model.plot <- ggplot(vp.species.pa.model, aes(x = Species, y = val
       "Temperature" = "cornflowerblue"
     ),
     labels = c(
-      Random..site = paste0("", (mean.vp.species.pa.model.text$Random..site)),
-      Random..year = paste0("", (mean.vp.species.pa.model.text$Random..year)),
-      Mixed.Layer.Depth = paste0("", (mean.vp.species.pa.model.text$Mixed.Layer.Depth)),
-      Sea.Ice = paste0("", (mean.vp.species.pa.model.text$Sea.Ice)),
-      Depth = paste0("", (mean.vp.species.pa.model.text$Depth)),
-      Salinity = paste0("", (mean.vp.species.pa.model.text$Salinity)),
-      Temperature = paste0("", (mean.vp.species.pa.model.text$Temperature))
+      Random..site = paste0("", (mean.vp.species.occurrence.model.text$Random..site)),
+      Random..year = paste0("", (mean.vp.species.occurrence.model.text$Random..year)),
+      Mixed.Layer.Depth = paste0("", (mean.vp.species.occurrence.model.text$Mixed.Layer.Depth)),
+      Sea.Ice = paste0("", (mean.vp.species.occurrence.model.text$Sea.Ice)),
+      Depth = paste0("", (mean.vp.species.occurrence.model.text$Depth)),
+      Salinity = paste0("", (mean.vp.species.occurrence.model.text$Salinity)),
+      Temperature = paste0("", (mean.vp.species.occurrence.model.text$Temperature))
     )
   ) +
   labs(
@@ -582,8 +603,8 @@ vp.species.pa.model.plot <- ggplot(vp.species.pa.model, aes(x = Species, y = val
   ) +
   theme(axis.text.y = element_text(margin = margin(r = 0))) +
   scale_y_continuous(expand = c(0, 0))
-vp.species.pa.model.plot
-ggsave("variance.paritioning.occurrence.tiff", plot=vp.species.pa.model.plot, device="tiff", width=15, height=9, units="cm", dpi=300)
+vp.species.occurrence.model.plot
+ggsave("variance.paritioning.occurrence.tiff", plot=vp.species.occurrence.model.plot, device="tiff", width=15, height=9, units="cm", dpi=300)
 print("variance partitioning per species plot saved") 
 
 
@@ -591,8 +612,7 @@ print("variance partitioning per species plot saved")
 
 
 # Supplementary Figure 6. Beta heatmap ----------------------------------------------------
-library(ggtree)
-beta = getPostEstimate(pa.model, "Beta")
+beta = getPostEstimate(occurrence.model, "Beta")
 # Remove edge lengths and plot the phylogenetic tree
 taxo.b <- taxo
 taxo.b$edge.length <- NULL  # Remove edge lengths
@@ -604,10 +624,10 @@ tree_plot_a
 
 # Extract and process beta mean and support values
 temp.beta <- as.data.frame(beta$mean) %>%
-  mutate(param = pa.model$covNames) %>%
+  mutate(param = occurrence.model$covNames) %>%
   pivot_longer(-param, names_to = "species", values_to = "value")
 sup.beta <- as.data.frame(beta$support) %>%
-  mutate(param = pa.model$covNames) %>%
+  mutate(param = occurrence.model$covNames) %>%
   pivot_longer(-param, names_to = "species", values_to = "support")
 
 # Combine mean and support data
@@ -838,7 +858,7 @@ process_and_plot_beta <- function(group_name, species_groups, beta, pa_model, su
   beta_group_support <- beta$support[, species_in_group]
   beta_group <- list(mean = beta_group_mean, support = beta_group_support)
   
-  # Subset the pa.model for the group
+  # Subset the occurrence.model for the group
   pa_model_group <- pa_model
   pa_model_group$Y <- pa_model$Y[, species_in_group]
   pa_model_group$spNames <- pa_model$spNames[species_in_group]
@@ -859,7 +879,7 @@ process_and_plot_beta <- function(group_name, species_groups, beta, pa_model, su
 # Process and Plot for Each Group
 groups <- c("A", "B", "AB")
 for (group in groups) {
-  process_and_plot_beta(group, species_groups, beta, pa.model)
+  process_and_plot_beta(group, species_groups, beta, occurrence.model)
 }
 
 # Define a function to process beta group data
