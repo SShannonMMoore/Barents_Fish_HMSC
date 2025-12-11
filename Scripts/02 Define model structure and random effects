@@ -1,3 +1,12 @@
+## Install packages and load libraries
+install.packages(c(
+  "dplyr", "Hmsc", "ape"
+))
+
+library(dplyr)
+library(Hmsc)
+library(ape)
+
 ## Set up HMSC model
 # Define regression model for environmental covariates
     Env.Formula = as.formula(paste("~",paste(colnames(environment), collapse="+")))
