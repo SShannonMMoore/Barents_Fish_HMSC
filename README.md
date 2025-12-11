@@ -1,14 +1,17 @@
 # Barents_Fish_HMSC
-HMSC of the Barents Sea fish community 
+HMSC of the Barents Sea demersal fish community 
 
 Main contact: Shannon Moore (shannon.moore@uit.no)
 
 # Scripts
-- Script 1 - Download and clean survery data from DATRAS, modified from CleanTrawlNAmEUr
-- Script 2 - Retrieve environmental covariates from Copernicus and reformat data
-- Script 3 - Exploration and selection of environmental covariates and species traits
-- Script 4 - Prepare all the data inputs for fitting the HMSC model, i.e, environmental data (X), community data (Y), trait data (T) and taxonomy (P). Also, define the model structure and define random effects.
-- Script 5 - HMSC model fitting
-- Script 6 - Compute model's explanatory and predictive power (2-fold crossvalidation)
-
-Code for plots can be found throughout the related scripts.
+- 01: Prepare data inputs for fitting the HMSC model
+- 02: Define model structure and random effects
+- 03: Test for correalation among traits and environmental covariates
+- 04: Export model for use in HMSC-HPC
+- 05: Compute MCMC chains in HMSC-HPC
+- 06: Process the HMSC model
+- 07: Check MCMC convergence
+- 08: Evaluate model fit
+- 09: Make predictions
+- 10: Plots
+- 11: Tables
