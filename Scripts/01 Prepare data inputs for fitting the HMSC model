@@ -27,6 +27,24 @@ library(readr)
 citation(package = "dggridR")
 R.version
 
+## Install packages and load libraries
+install.packages(c(
+  "dplyr", "tibble", "tidyr", "stringr", "ggplot2", "ggrepel", 
+  "dggridR", "maps", "ape", "data.table"
+))
+
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(ggrepel)
+library(dggridR)
+library(maps)
+library(ape)
+library(data.table)
+library(hutilscpp)
+
 ## Load Required Data
 load("NOR-BTS_clean.RData")
 bess <- data  
@@ -128,7 +146,6 @@ bess.spread <- cbind(bess.spread[1:7], ifelse(bess.spread[8:ncol(bess.spread)]>0
 ## Create Study Design (ALREADY CREATED IN R STUIDO TO MAKE SURE HEXAGONS ARE INCLUDED)
   # Code for RStudio
     # Construct study design
-      library(dggridR)
       study.design = bess.spread %>%
         dplyr::select(sample, year, month, day, latitude, longitude)
       study.design$time <- as.Date(with(study.design, paste(year, month, day,sep="-")), "%Y-%m-%d")
