@@ -29,3 +29,5 @@ environment.summary.b <- environment.summary %>%
   ungroup() %>%
   dplyr::select(environmental_covariate, row_min, row_max, row_mean, row_sd) 
 write.table(environment.summary.b, "environment.summary.csv", sep = ";", row.names = FALSE, quote = TRUE)
+
+# End script "11 Tables"
