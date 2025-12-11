@@ -1,4 +1,11 @@
-            
+## Install packages and load libraries
+install.packages(c(
+  "Hmsc"
+))
+
+library(Hmsc)
+
+
 ## Evaluate model fit
     # Evaluate explanatory power
         # For our model type (abundance, normal distribution) MF provides two metrics, 
@@ -20,28 +27,28 @@
             # TjurR2: Provides a measure of the model’s discriminatory ability (but I
                 # think the lower it is, the better - SM)
 
-predY.pa.model=computePredictedValues(pa.model)
-    # This function computes the predicted values for the response variable (Y) based on the fitted HMSC model (pa.model). It uses the environmental covariates, traits, phylogenetic relationships, and random effects specified in the model to generate predictions.
-fit.pa.model = evaluateModelFit(hM = pa.model, predY = predY.pa.model)
+predY.occurrence.model=computePredictedValues(occurrence.model)
+    # This function computes the predicted values for the response variable (Y) based on the fitted HMSC model (occurrence.model). It uses the environmental covariates, traits, phylogenetic relationships, and random effects specified in the model to generate predictions.
+fit.occurrence.model = evaluateModelFit(hM = occurrence.model, predY = predY.occurrence.model)
 
 tiff("RMSE.AUC.TjurR2.occurrence.tiff", width=15, height=9, units="cm", res=300)
 tiff("RMSE.R2.abundance.tiff", width=15, height=9, units="cm", res=300)
 # RMSE (abundance + occurrence)
-mean(fit.pa.model$RMSE, na.rm = T)
+mean(fit.occurrence.model$RMSE, na.rm = T)
 #png("RMSE.histogram.png", type = "cairo", res = 300)
 par(mfrow=c(1,3))
-hist(fit.pa.model$RMSE, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.pa.model$RMSE),2)))
+hist(fit.occurrence.model$RMSE, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.occurrence.model$RMSE),2)))
 
 # R2 (abundance)
-mean(fit.pa.model$R2, na.rm = T)
+mean(fit.occurrence.model$R2, na.rm = T)
 #png("R2.histogram.png", type = "cairo", res = 300)
-hist(fit.pa.model$R2, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.pa.model$R2, na.rm = T),2)))
+hist(fit.occurrence.model$R2, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.occurrence.model$R2, na.rm = T),2)))
 
 # AUC (occurrence)
-mean(fit.pa.model$AUC, na.rm = T)
-hist(fit.pa.model$AUC, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.pa.model$AUC),2)))
+mean(fit.occurrence.model$AUC, na.rm = T)
+hist(fit.occurrence.model$AUC, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.occurrence.model$AUC),2)))
             
 # Tjur R2 (occurrence)
-mean(fit.pa.model$TjurR2, na.rm = T)
-hist(fit.pa.model$TjurR2, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.pa.model$TjurR2),2)))
+mean(fit.occurrence.model$TjurR2, na.rm = T)
+hist(fit.occurrence.model$TjurR2, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.occurrence.model$TjurR2),2)))
 dev.off()
