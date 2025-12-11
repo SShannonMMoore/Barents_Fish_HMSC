@@ -1,3 +1,12 @@
+## Install packages and load libraries
+install.packages(c(
+  "dplyr", "ggplot", "ggcorrplot"
+))
+
+library(dplyr)
+library(ggplot)
+library(ggcorrplot)
+
 ## Check correlation among traits
 traits.correlation <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
   dplyr::select(species, max.body.size, fecundity, trophic.level) %>%
