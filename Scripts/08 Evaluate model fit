@@ -52,3 +52,5 @@ hist(fit.occurrence.model$AUC, xlim = c(0,1), main=paste0("Mean = ", round(mean(
 mean(fit.occurrence.model$TjurR2, na.rm = T)
 hist(fit.occurrence.model$TjurR2, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.occurrence.model$TjurR2),2)))
 dev.off()
+
+# End script "08 Evaluate model fit"
