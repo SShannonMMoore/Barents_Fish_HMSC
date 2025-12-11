@@ -1,3 +1,12 @@
+# Install required packages
+install.packages(c(
+  "dplyr", "tibble"
+))
+# Load required packages
+library(dplyr)
+library(tibble)
+
+
 # Supplementary Tables
 load("traits.used.csv")
 load("species.regions.csv")
