@@ -1,32 +1,3 @@
-library(tidyverse)
-library(ape)
-# Package for phylogenetics
-library(data.table)
-# Package for fread command
-library(hutilscpp)
-# Package for match_nrst_haversine (nearest neighbor for coordinates in 
-# survey and environmental covariates)
-library(Hmsc)
-# Package with HMSC model
-library(vioplot)
-library(EDISON)
-# For running MCMC (I think)
-library(turboEM)
-# Also for MCMC (I think...)
-library(corrplot)
-library(abind)
-library(viridisLite)
-library(sp)
-library(RColorBrewer)
-library(ggcorrplot)
-library(jsonify)
-library(rapidjsonr)
-library(colorspace)
-library(dggridR)
-library(readr)
-citation(package = "dggridR")
-R.version
-
 ## Install packages and load libraries
 install.packages(c(
   "dplyr", "tibble", "tidyr", "stringr", "ggplot2", "ggrepel", 
@@ -244,7 +215,6 @@ taxo <- as.phylo(~phylum/class/order/family/genus/accepted_name,
 taxo$edge.length <- rep(1, length(taxo$edge))
 taxo$tip.label <- gsub("_"," ",taxo$tip.label)
 
-#pdf("Rplots_taxonomic_tree.pdf")
 plot(taxo, cex=0.4)
 print("Taxonomic tree plotted")
 
@@ -450,4 +420,6 @@ head(environment)
 nrow(environment)
 # Environmental covariates
 
-save(study.design, species, taxo, traits, environment, file="HMSC_occurrence_1o")
+save(study.design, species, taxo, traits, environment, file="HMSC_occurrence")
+
+# End script "01 Prepare data inputs for fitting the HMSC model"
