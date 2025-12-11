@@ -7,14 +7,13 @@ library(dplyr)
 library(Hmsc)
 library(ape)
 
-## Set up HMSC model
 # Define regression model for environmental covariates
-    Env.Formula = as.formula(paste("~",paste(colnames(environment), collapse="+")))
-    Env.Formula
+Env.Formula = as.formula(paste("~",paste(colnames(environment), collapse="+")))
+Env.Formula
     
 # Define regression model for traits
-    Traits.Formula = as.formula(paste("~",paste(colnames(traits), collapse="+")))
-    Traits.Formula
+Traits.Formula = as.formula(paste("~",paste(colnames(traits), collapse="+")))
+Traits.Formula
         
 # Define the study design from which the Random effects will be defined
 studyDesign <- data.frame(site = as.factor(study.design$cell),
@@ -32,7 +31,6 @@ rL.polygon$s
 years <- data.frame(year = unique(study.design$year))
 rownames(years) <- years$year
 sum(duplicated(years))
-#rL.year <- HmscRandomLevel(sData = (unique(years$year)), longlat = FALSE)
 rL.year <- HmscRandomLevel(units = (unique(years$year)), longlat = FALSE)
 rL.year <- setPriors(rL.year, nfMin = 1, nfMax = 5) # setting the minimum and maximum number of latent variables
 rL.year$pi
@@ -47,3 +45,5 @@ model_structure
 
 save(model_structure, file = "occurrence_model")
 print("Finished")
+
+# End script "02 Define model structure and random effects"
