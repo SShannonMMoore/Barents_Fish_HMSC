@@ -1,7 +1,16 @@
-load("occurrence_model_1o_processed")
-load("HMSC_occurrence_1o")
+## Install packages and load libraries
+install.packages(c(
+  "Hmsc", "coda", "vioplot"
+))
+
+library(Hmsc)
+library(coda)
+library(vioplot)
+
+load("occurrence_model_processed")
+load("HMSC_occurrence")
 print("loaded")
-pa.model <- occurrence_model_1o_processed
+pa.model <- occurrence_model_processed
 
 load("abundance_hurdle_model_5i_processed")
 load("HMSC_abundance_hurdle_5i")
