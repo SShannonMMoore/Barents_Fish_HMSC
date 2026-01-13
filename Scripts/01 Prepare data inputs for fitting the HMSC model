@@ -280,30 +280,8 @@ env.data <- read.csv("SST.SBT.SSS.SBS.depth.icedays.mlotst.seasonality.csv")
 env.data <- env.data %>%
   dplyr::select(-SSS, SSS_seasonality)
 head(env.data)
-  
-  
-  
-  mutate(
-    sea_ice = ifelse(siconc > 0.15, 1, 0),
-    log_depth = log(model_depth)
-  ) %>%
-  dplyr::select(-siconc, -model_depth, -SSS, -SSS_seasonality) %>%
-  dplyr::rename(
-    SST = thetao,
-    SBT = bottomT,
-    mixed_layer = mlotst
-  )
 
-data_with_na <- factor(ifelse(is.na(species), "NA", as.character(species)))
-ggplot(data.frame(value = data_with_na), aes(x = value)) +
-  geom_bar(fill = "skyblue", color = "black") +
-  labs(
-    title = "Histogram Including NA Values",
-    x = "Values",
-    y = "Count"
-  ) +
-  theme_minimal()## Match Environmental Covariates to Sampling Coordinates
-
+## Match Environmental Covariates to Sampling Coordinates
 # Extract coordinates
 load("study.design.polygons.R")
 survey.coords <- dplyr::select(study.design, latitude, longitude)
@@ -688,30 +666,8 @@ env.data <- read.csv("SST.SBT.SSS.SBS.depth.icedays.mlotst.seasonality.csv")
 env.data <- env.data %>%
   dplyr::select(-SSS, SSS_seasonality)
 head(env.data)
-  
-  
-  
-  mutate(
-    sea_ice = ifelse(siconc > 0.15, 1, 0),
-    log_depth = log(model_depth)
-  ) %>%
-  dplyr::select(-siconc, -model_depth, -SSS, -SSS_seasonality) %>%
-  dplyr::rename(
-    SST = thetao,
-    SBT = bottomT,
-    mixed_layer = mlotst
-  )
 
-data_with_na <- factor(ifelse(is.na(species), "NA", as.character(species)))
-ggplot(data.frame(value = data_with_na), aes(x = value)) +
-  geom_bar(fill = "skyblue", color = "black") +
-  labs(
-    title = "Histogram Including NA Values",
-    x = "Values",
-    y = "Count"
-  ) +
-  theme_minimal()## Match Environmental Covariates to Sampling Coordinates
-
+## Match Environmental Covariates to Sampling Coordinates
 # Extract coordinates
 load("study.design.polygons.R")
 survey.coords <- dplyr::select(study.design, latitude, longitude)
