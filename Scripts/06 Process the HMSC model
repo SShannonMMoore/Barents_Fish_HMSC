@@ -7,7 +7,11 @@
 library("Hmsc")
 library("jsonify")
 
-load("occurrence_model_1o")
+########################################################################
+######### OCCURRENCE MODEL #############################################
+########################################################################
+
+load("occurrence_model")
 
 thin = 100 # interval of iterations per samples
 nSamples = 250 # number of samples taken per chain
@@ -18,10 +22,35 @@ transient = nSamples * thin
 chainList = vector("list", nChains)
 
 for(cInd in 1:nChains){
-    chain_file_path = file.path(getwd(), sprintf("post_chain%.2d_file_1o.rds", cInd-1))
+    chain_file_path = file.path(getwd(), sprintf("post_chain%.2d_file_occurrence.rds", cInd-1))
     chainList[[cInd]] = from_json(readRDS(file = chain_file_path)[[1]])[[1]]
 }
         
-occurrence_model_1o_processed = importPosteriorFromHPC(model_structure, chainList, nSamples, thin, transient)
-occurrence_model_1o_processed
-save(occurrence_model_1o_processed, file = "occurrence_model_1o_processed")
+occurrence_model_processed = importPosteriorFromHPC(occurrence_model_structure, chainList, nSamples, thin, transient)
+occurrence_model_processed
+save(occurrence_model_processed, file = "occurrence_model_processed")
+
+########################################################################
+######### ABUNDANCE MODEL ##############################################
+########################################################################
+
+load("abundance_model")
+
+thin = 100 # interval of iterations per samples
+nSamples = 250 # number of samples taken per chain
+nChains = 4
+verbose = 100
+transient = nSamples * thin
+
+chainList = vector("list", nChains)
+
+for(cInd in 1:nChains){
+    chain_file_path = file.path(getwd(), sprintf("post_chain%.2d_file_abundance.rds", cInd-1))
+    chainList[[cInd]] = from_json(readRDS(file = chain_file_path)[[1]])[[1]]
+}
+        
+abundance_model_processed = importPosteriorFromHPC(abundance_model_structure, chainList, nSamples, thin, transient)
+abundance_model_processed
+save(abundance_model_processed, file = "abundance_model_processed")
+
+End script "06 Process the HMSC model"
