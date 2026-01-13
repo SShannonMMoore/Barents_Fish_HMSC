@@ -829,6 +829,6 @@ head(environment)
 nrow(environment)
 # Environmental covariates
 
-save(study.design, species, taxo, traits, environment, file="HMSC_occurrence")
+save(study.design, species, taxo, traits, environment, file="HMSC_abundance")
 
 # End script "01 Prepare data inputs for fitting the HMSC model"
