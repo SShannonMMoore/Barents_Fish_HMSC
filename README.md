@@ -12,6 +12,5 @@ Main contact: Shannon Moore (shannon.moore@uit.no)
 - 06: Process the HMSC model
 - 07: Check MCMC convergence
 - 08: Evaluate model fit
-- 09: Make predictions
-- 10: Plots
-- 11: Tables
+- 09: Plots
+- 10: Tables
