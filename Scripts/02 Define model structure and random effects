@@ -7,6 +7,10 @@ library(dplyr)
 library(Hmsc)
 library(ape)
 
+########################################################################
+######### OCCURRENCE MODEL #############################################
+########################################################################
+
 # Define regression model for environmental covariates
 Env.Formula = as.formula(paste("~",paste(colnames(environment), collapse="+")))
 Env.Formula
@@ -44,6 +48,54 @@ model_structure = Hmsc(Y = species, XData = environment,  XFormula = Env.Formula
 model_structure
 
 save(model_structure, file = "occurrence_model")
+print("Finished")
+
+########################################################################
+######### ABUNDANCE MODEL #############################################
+########################################################################
+
+## Set up HMSC model
+# Log abundances
+species <- log(species + 1)
+head(species)
+
+# Define regression model for environmental covariates
+Env.Formula = as.formula(paste("~",paste(colnames(environment), collapse="+")))
+Env.Formula
+    
+# Define regression model for traits
+Traits.Formula = as.formula(paste("~",paste(colnames(traits), collapse="+")))
+Traits.Formula
+        
+# Define the study design from which the Random effects will be defined
+studyDesign <- data.frame(site = as.factor(study.design$cell),
+                          year = as.factor(study.design$year))
+table(nrow(studyDesign) == c(nrow(environment), nrow(species)))
+
+# Define spatial random effect
+xy <- data.frame(study.design[match(unique(study.design$cell), study.design$cell), c("cell.center.longitude", "cell.center.latitude")]) 
+rownames(xy) <- unique(study.design$cell) 
+rL.polygon <- HmscRandomLevel(sData = xy, longlat = TRUE)
+rL.polygon <- setPriors(rL.polygon, nfMin = 1, nfMax = 5) 
+rL.polygon$s
+
+# Define temporal random effect
+years <- data.frame(year = unique(study.design$year))
+rownames(years) <- years$year
+sum(duplicated(years))
+rL.year <- HmscRandomLevel(units = (unique(years$year)), longlat = FALSE)
+rL.year <- setPriors(rL.year, nfMin = 1, nfMax = 5) # setting the minimum and maximum number of latent variables
+rL.year$pi
+
+# Specify HMSC model structure (ABUNDANCE)
+model_structure = Hmsc(Y = species, XData = environment,  XFormula = Env.Formula, 
+                        phyloTree = taxo, studyDesign = studyDesign, Tr = traits,
+                        TrFormula = Traits.Formula, ranLevels = 
+                        list("site"=rL.polygon, "year"=rL.year),  distr = "normal") #' depending on your data, HMSC also implements `distr = "normal", “probit”, “poisson”, “lognormal poisson”`
+        
+model_structure
+
+save(model_structure, file = "abundance_model")
 print("Finished")
 
 # End script "02 Define model structure and random effects"
