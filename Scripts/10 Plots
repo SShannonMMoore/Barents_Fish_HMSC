@@ -30,6 +30,7 @@ library(vegan)
 library(readr)
 library(ggOceanMaps)
 library(ggtree)
+library(spdep)
 
 
 # Install required packages
@@ -48,30 +49,6 @@ library(ggtree)
 library(ape)
 library(stringr)
 library(grid)
-
-
-
-# Load model
-load("occurrence_model_processed")
-load("HMSC_occurrence")
-print("loaded")
-occurrence.model <- occurrence_model_processed
-mpost.occurrence.model= convertToCodaObject(occurrence.model)
-
-
-
-
-vp.occurrence.model$R2T$Beta
-
-vp.occurrence.model$R2T$Y
-# The proportion of variance in the species' responses explained by the model
-
-mean(vp.occurrence.model$R2T$Beta[-1])
-# How much do traits mediate the response to the environment 
-
-
-
-
 
 # Figure 1. Study area ----------------------------------------------------
 # Obs! Polar front was estimated and drawn on top of this figure in Inkscape
@@ -93,6 +70,25 @@ sampling.bathymetry.map <- basemap(limits = c(0, 50, 69, 83), bathy.style = "rcb
   )
 ggsave("sampling.bathymetry.map.tiff", plot=sampling.bathymetry.map, device="tiff", width=12, height=9, units="cm", dpi=300)
 
+########################################################################
+######### OCCURRENCE MODEL #############################################
+########################################################################
+
+# Load model
+load("occurrence_model_processed")
+load("HMSC_occurrence")
+print("loaded")
+occurrence.model <- occurrence_model_processed
+mpost.occurrence.model= convertToCodaObject(occurrence.model)
+
+vp.occurrence.model$R2T$Beta
+
+vp.occurrence.model$R2T$Y
+# The proportion of variance in the species' responses explained by the model
+
+mean(vp.occurrence.model$R2T$Beta[-1])
+# How much do traits mediate the response to the environment 
+
 
 
 
@@ -102,6 +98,7 @@ ggsave("sampling.bathymetry.map.tiff", plot=sampling.bathymetry.map, device="tif
 groupnames.vp.occurrence.model = c("Depth","SST","SBT","SBS","Mixed_Layer_Depth", "SST_seasonality", "SBT_seasonality", "SBS_seasonality", "Sea_Ice")
 group.vp.occurrence.model = c(1,1,2,3,4,5,6,7,8,9)
 
+##### OCCURRENCE MODEL #####
 # Compute species-specific variance partitioning
 vp.occurrence.model <- computeVariancePartitioning(occurrence.model, group = group.vp.occurrence.model, groupnames = groupnames.vp.occurrence.model)
 
@@ -216,11 +213,13 @@ vp.occurrence.model.plot.occurrence
 ggsave("variance.paritioning.all.occurrence.tiff", plot=vp.occurrence.model.plot.occurrence, device="tiff", width=15, height=9, units="cm", dpi=300)
 print("variance partitioning plot saved") 
 
+##### ABUNDANCE MODEL #####
 
 
 
 
 # Figure 3. Beta PCA ----------------------------------------------------
+##### OCCURRENCE MODEL #####
 # Extract posterior means of beta parameters
 beta = getPostEstimate(occurrence.model, "Beta")
 beta.matrix <- t(beta$mean)  # Transpose beta matrix
@@ -323,6 +322,7 @@ print(outliers)
 
 
 # Figure 4. Trait mediation ----------------------------------------------------
+##### OCCURRENCE MODEL #####
 # Prepare data for plotting
 env.traits <- as.data.frame(vp.occurrence.model$R2T$Beta[-1]) %>%
   rename(value = "vp.occurrence.model$R2T$Beta[-1]") %>%
@@ -392,108 +392,819 @@ print("env.explained.variance.png")
 
 
 
+# Figure 5 (A-C). Predicted CWM ----------------------------------------------------
+# Obs! Polar front was estimated and drawn on top of this figure in Inkscape
+# Load data
+load("NOR-BTS_clean.RData")
+barents <- data
 
-# Figure 5. Gamma heatmap ----------------------------------------------------
-# Extract and process gamma estimates
-gamma <- getPostEstimate(occurrence.model, "Gamma")
-temp.gamma <- as.data.frame(gamma$mean) %>%
+# Convert to sf and reproject
+sf_barents <- st_as_sf(barents, coords = c("longitude", "latitude"), crs = 4326) %>%
+  st_transform(3035)
+
+# Generate concave hull and buffer (optional smoothing)
+# Just creates a general outline of a set of points
+hull_ba <- concaveman::concaveman(sf_barents, concavity = 2) %>%
+  st_buffer(dist = 5000)
+
+# Load land polygons and reproject
+land <- rnaturalearth::ne_countries(scale = "large", returnclass = "sf") %>%
+  sf::st_transform(3035)
+
+# Clean geometries
+hull_ba <- sf::st_make_valid(sf::st_zm(hull_ba))
+land <- sf::st_make_valid(sf::st_zm(land))
+
+# Remove land from the buffered hull
+sea_ba <- sf::st_difference(hull_ba, sf::st_union(land))
+
+# Visualize
+ggplot2::ggplot(sea_ba) + ggplot2::geom_sf()
+sea_area_m2 <- st_area(sea_ba)
+# Convert to square kilometers
+sea_area_km2 <- sum(as.numeric(sea_area_m2)) / 1e6  # Divide by 1,000,000 to convert m² to km²
+# Print the total area
+print(paste("Total area of the sea (in km²):", sea_area_km2))
+# 846553.054053805
+
+## Define hexagons
+# Desired area of each hexagonal cell (e.g., 1,000,000 m² = 1 km²)
+hex_area <- 500 * 1e6  # Area in square meters 500,000,000 500km2
+# Calculate the side length of the hexagonal cells
+hex_side <- sqrt((2 * hex_area) / (3 * sqrt(3)))
+print(hex_side)  # Side length
+# 13,872m
+
+# Create a hexagonal grid over the extent of sea_ba
+grid_hex <- st_make_grid(sea_ba, cellsize = hex_side, square = FALSE)
+
+# Convert the hexagonal grid into an sf object
+grid_hex_sf <- st_sf(geometry = grid_hex)
+
+# Intersect the hexagonal grid with the sea_ba polygon
+sea_grid <- sf::st_intersection(grid_hex_sf, sea_ba)
+num_hexagons <- nrow(sea_grid)
+# 1461
+sea_grid$area_m2 <- st_area(sea_grid)
+sea_grid$area_km2 <- as.numeric(sea_grid$area_m2) / 1e6
+# BUT WHY DO 380 OF THE POLYGONS HAVE SMALLER THAN 500KM2 AREA?
+# THE REST HAVE 666KM2 AREAS - WHY NOT 500?
+
+ggplot() +
+  geom_sf(data = sea_grid, fill = "lightblue", color = "black") +
+  theme_minimal() +
+  labs(title = "500km2 Area Hexagons")
+
+st_crs(sea_grid)
+grid_geo <- st_transform(sea_grid, crs = 4326)
+st_crs(grid_geo)
+
+grid_centroids <- st_centroid(grid_geo)
+grid.coords <- st_coordinates(grid_centroids)
+grid.coords <- grid.coords %>% 
+  as.data.frame() %>% 
   rename(
-    "Maximum Body Size" = "V1",
-    "Trophic Level" = "V2",
-    "Fecundity (Logged)" = "V3"
-  ) %>%
-  mutate(param = occurrence.model$covNames) %>%
-  pivot_longer(
-    cols = -param, 
-    names_to = "trait", 
-    values_to = "value"
+    latitude = Y,
+    longitude = X) 
+head(grid.coords)
+save(grid.coords, file = "grid.coords.R")
+
+# ## Completed in VScode
+# # Read in Environmental Covariates Data
+# env.data <- fread("SST.SBT.SSS.SBS.depth.icedays.mlotst.seasonality.csv") 
+# head(env.data)
+# env.data <- env.data %>%
+#   dplyr::select(-SSS, SSS_seasonality)
+# head(env.data)
+# 
+# # Create new column with just month-day
+# env.data$month_day <- format(env.data$time, "%m-%d")
+# env.data$year <- format(env.data$time, "%y")
+# head(env.data)
+# 
+# # Define date boundaires
+# start_date <- "08-02"
+# end_date <- "10-08"
+# 
+# # Subset the data
+# subset_data <- env.data[env.data$month_day >= start_date & env.data$month_day <= end_date]
+# head(subset_data)
+# 
+# # Calculate mean for each year
+# env.data.mean <- subset_data %>%
+#   group_by(year, latitude, longitude) %>%
+#   summarise(across(c(log_depth, SST, SBT, SSS, SBS, SST_seasonality,
+#                      SBT_seasonality, SSS_seasonality, SBS_seasonality, 
+#                      mixed_layer, ice_days),mean),
+#             .groups = 'keep') %>%
+#   as.data.frame()
+# write.csv(env.data.mean, "env.data.mean.csv")
+# print("Saved env.data.mean")
+
+
+## Match Environmental Covariates to New Grid Coordinates
+# Extract coordinates
+env.data.mean <- fread("env.data.mean.d.csv")
+head(env.data.mean)
+print(range(env.data.mean$year, na.rm=TRUE))
+env.coords <- dplyr::select(env.data.mean, latitude, longitude)
+head(env.coords)
+
+unique.env.coords <- env.coords %>% distinct(latitude, longitude, .keep_all=TRUE)
+
+# Match environmental coordinates to closest survey coordinates
+load("grid.coords.R")
+start.time <- Sys.time()
+start.time
+matched.coords <- match_nrst_haversine(
+  grid.coords$latitude, grid.coords$longitude,
+  unique.env.coords$latitude, unique.env.coords$longitude,
+  cartesian_R = 0.125
+)
+print(Sys.time() - start.time)
+# matched.coords should be same length as grid.coords
+
+head(matched.coords)
+unique.env.coords[46928,]
+grid.coords[1,]
+# Matches
+
+# Add positional indices to grid and matched coordinates
+grid.coords <- grid.coords %>%
+  mutate(index = 1:nrow(grid.coords))
+matched.coords <- matched.coords %>%
+  mutate(index = 1:nrow(matched.coords))
+
+# Join matched coordinates with grid coordinates
+grid.coords.matched.coords <- left_join(matched.coords, grid.coords, by = "index")
+grid.coords.matched.coords <- grid.coords.matched.coords %>%
+  dplyr::rename(
+    grid.longitude = longitude,
+    grid.latitude = latitude,
   )
+head(grid.coords.matched.coords)
+# Add positional indices to environmental coordinates
+unique.env.coords <- unique.env.coords %>%
+  mutate(index = 1:nrow(unique.env.coords))
 
-# Process support values
-sup.gamma <- as.data.frame(gamma$support) %>%
-  mutate(param = occurrence.model$covNames) %>%
-  pivot_longer(
-    cols = -param, 
-    names_to = "species", 
-    values_to = "support"
+# Join matched grid coordinates with environmental coordinates
+all.matched.coords <- left_join(grid.coords.matched.coords, unique.env.coords, by = c('pos' = 'index'))
+all.matched.coords <- all.matched.coords %>%
+  dplyr::rename(
+    env.longitude = longitude,
+    env.latitude = latitude,
   )
+head(all.matched.coords)
 
-temp.gamma <- temp.gamma %>%
-  mutate(support = sup.gamma$support)
-
-# Add support level and classify positive/negative effects
-supportLevel <- 0.95
-temp.gamma <- temp.gamma %>%
+# Rename columns for clarity and create site identifiers
+all.matched.coords <- all.matched.coords %>%
+  dplyr::select(-pos, -dist, -index) %>%
   mutate(
-    pos.neg = case_when(
-      support > supportLevel ~ "1",
-      support < (1 - supportLevel) ~ "-1",
-      TRUE ~ "0"
-    )
+    grid.site = str_c(grid.latitude, grid.longitude),
+    env.site = str_c(env.latitude, env.longitude)
   )
 
-# Rename and reorder variables
-temp.gamma <- temp.gamma %>%
-  filter(param != "(Intercept)") %>%
-  mutate(
-    param = recode(param,
-                   "SST" = "SST",
-                   "SBT" = "SBT",
-                   "SBS" = "SBS",
-                   "log_depth" = "Depth (Logged)",
-                   "ice_days" = "Sea Ice",
-                   "mixed_layer" = "Mixed Layer Depth",
-                   "SST_seasonality" = "SST Seasonality",
-                   "SBT_seasonality" = "SBT Seasonality",
-                   "SBS_seasonality" = "SBS Seasonality"
-    ),
-    trait = factor(trait, levels = c("Maximum Body Size", "Trophic Level", "Fecundity (Logged)")),
-    param = factor(param, levels = c(
-      "SST", "SBT", "SBS", "Depth (Logged)", "Sea Ice", 
-      "Mixed Layer Depth", "SST Seasonality", "SBT Seasonality", "SBS Seasonality"
-    )),
-    pos.neg = factor(pos.neg, levels = c("1", "0", "-1"))  # Ensure consistent legend order
+# Prepare environmental data for merging
+env.data.mean.site <- env.data.mean %>%
+  mutate(env.site = str_c(latitude, longitude)) %>%
+  rename(
+    env.latitude = latitude,
+    env.longitude = longitude
   )
+head(env.data.mean.site)
+print(range(env.data.mean.site$year, na.rm=TRUE))
+head(all.matched.coords)
+
+# Merge environmental data with survey data using the site-time identifier
+start.time <- Sys.time()
+start.time
+env.merged <- left_join(all.matched.coords, env.data.mean.site, by=c("env.latitude", "env.longitude"))
+print(Sys.time() - start.time)  # Print time taken for merging
+head(env.merged)
+print(range(env.merged$year, na.rm=TRUE))
+
+## Finalize Environmental Data
+# Clean up the merged data
+env.grid <- env.merged %>%
+  dplyr::select(
+    -grid.site, -env.site.x, -env.site.y)
+head(env.grid)
+print(range(env.merged$year, na.rm=TRUE))
+
+# Match back to polygon coordinates and polygons
+grid.coords <- grid.coords %>%
+  rename(
+    grid.latitude = latitude,
+    grid.longitude = longitude
+  )
+head(grid.coords)
+start.time <- Sys.time()
+env.grid.coords <- left_join(env.grid, grid.coords, by=c("grid.latitude", "grid.longitude"))
+print(Sys.time() - start.time)  # Print time taken for merging
+head(env.grid.coords)
+print(range(env.grid.coords$year, na.rm=TRUE))
+
+grid_geo <- grid_geo %>%
+  mutate(index = 1:nrow(grid_geo))
+head(grid_geo)
+save(grid_geo, file = "grid_geo")
+
+env.grid.polygons <- left_join(grid_geo, env.grid.coords, by="index")
+head(env.grid.polygons)
+print(range(env.grid.polygons$year, na.rm=TRUE))
+
+env.grid.polygons <- env.grid.polygons %>%
+  mutate(years_transformed = ifelse(year < 100, 2000 + year, year)) %>%
+  dplyr::select(-year) %>%
+  rename(year = years_transformed)
+head(env.grid.polygons)
+print(range(env.grid.polygons$year, na.rm=TRUE))
+save(env.grid.polygons, file = "env.grid.polygons")
+
+##### OCCURRENCE MODEL #####
+load("occurrence_model_processed")
+occurrence.model <- occurrence_model_processed
+load("HMSC_occurrence")
+load("env.grid.polygons")
+
+study.design.old <- occurrence.model$studyDesign
+study.design.new <- data.frame(site = as.factor(env.grid.polygons$index),
+                               year = as.factor(env.grid.polygons$year))
+study.design.all = rbind(study.design.old,study.design.new)
+
+# Define spatial random effect
+xy.old <- data.frame(study.design[match(unique(study.design$cell), study.design$cell), c("cell.center.longitude", "cell.center.latitude")]) 
+rownames(xy.old) <- unique(study.design$cell) 
+xy.old <- xy.old %>%
+  rename(
+    grid.latitude = cell.center.latitude,
+    grid.longitude = cell.center.longitude
+  )
+head(xy.old)
+rL.polygon.old <- HmscRandomLevel(sData = xy.old, longlat = TRUE)
+rL.polygon.old <- setPriors(rL.polygon.old, nfMin = 1, nfMax = 5) 
+rL.polygon.old$s
+
+xy.new <- data.frame(env.grid.polygons[match(unique(env.grid.polygons$index), env.grid.polygons$index), c("grid.longitude", "grid.latitude")]) 
+rownames(xy.new) <- unique(env.grid.polygons$index) 
+xy.new <- xy.new %>% 
+  dplyr::select(grid.longitude, grid.latitude) %>%
+  st_drop_geometry()
+head(xy.new)
+rL.polygon.new <- HmscRandomLevel(sData = xy.new, longlat = TRUE)
+rL.polygon.new <- setPriors(rL.polygon.new, nfMin = 1, nfMax = 5) 
+rL.polygon.new$s
+
+xy.all = rbind(xy.old, xy.new)
+rL.polygon.new$pi = study.design.all[,1]
+rL.polygon.new$s = xy.all
+save(rL.polygon.new, file = "rL.polygon.new.R")
+
+years.old <- data.frame(year = unique(study.design$year))
+rownames(years.old) <- years.old$year
+sum(duplicated(years.old))
+rL.year <- HmscRandomLevel(units = (unique(years.old$year)), longlat = FALSE)
+rL.year <- setPriors(rL.year, nfMin = 1, nfMax = 5)
+rL.year$pi
+
+head(env.grid.coords)
+env.grid.coords.data <- env.grid.coords %>%
+  dplyr::select(-env.latitude, -env.longitude, -year, -index, -grid.longitude, -grid.latitude)
+head(env.grid.coords.data)
+head(study.design.new)
+
+head(env.grid.polygons)
+env.grid.polygons.data <- env.grid.polygons %>%
+  dplyr::select(-env.latitude, -env.longitude, -year, -index, -grid.longitude, -grid.latitude) %>%
+  st_drop_geometry()
+head(env.grid.polygons.data)
+
+head(study.design.new)
+head(env.grid.polygons.data)
+save(occurrence.model, study.design.new, env.grid.polygons.data, rL.polygon.new, rL.year, file="predict_occurrence")
+# ## Done on VS Code
+# load("predict_occurrence")
+# 
+# start.time <- Sys.time()
+# start.time
+# pred_occurrence = predict(occurrence.model, studyDesign=study.design.new, XData=env.grid.polygons.data, ranLevels=list(site=rL.polygon.new, year=rL.year),
+#                          expected=TRUE, predictEtaMean=TRUE)
+# print(Sys.time() - start.time)  # Print time taken for merging
+# 
+# start.time <- Sys.time()
+# start.time
+# save(pred_occurrence_3D, file="pred_occurrence")
+# print(Sys.time() - start.time)  # Print time taken for merging
+# print("saved pred_occurrence")
+# 
+# pred_occurrence = apply(abind(pred_occurrence,along=3),c(1,2),mean)
+# save(pred_occurrence, file="pred_occurrence")
+# print("saved pred_occurrence")
+# load("pred_occurrence")
+#
+# head(pred_occurrence)
+# ncol(pred_occurrence)
+# nrow(pred_occurrence)
+# # 17481 = 939 polygons x 19 years
+
+##### ABUNDANCE MODEL #####
+load("abundance_model_processed")
+abundance.model <- abundance_model_processed
+load("HMSC_abundance")
+load("env.grid.polygons")
+
+study.design.old <- abundance.model$studyDesign
+study.design.new <- data.frame(site = as.factor(env.grid.polygons$index),
+                               year = as.factor(env.grid.polygons$year))
+study.design.all = rbind(study.design.old,study.design.new)
+
+# Define spatial random effect
+xy.old <- data.frame(study.design[match(unique(study.design$cell), study.design$cell), c("cell.center.longitude", "cell.center.latitude")]) 
+rownames(xy.old) <- unique(study.design$cell) 
+xy.old <- xy.old %>%
+  rename(
+    grid.latitude = cell.center.latitude,
+    grid.longitude = cell.center.longitude
+  )
+head(xy.old)
+rL.polygon.old <- HmscRandomLevel(sData = xy.old, longlat = TRUE)
+rL.polygon.old <- setPriors(rL.polygon.old, nfMin = 1, nfMax = 5) 
+rL.polygon.old$s
+
+xy.new <- data.frame(env.grid.polygons[match(unique(env.grid.polygons$index), env.grid.polygons$index), c("grid.longitude", "grid.latitude")]) 
+rownames(xy.new) <- unique(env.grid.polygons$index) 
+xy.new <- xy.new %>% 
+  dplyr::select(grid.longitude, grid.latitude) %>%
+  st_drop_geometry()
+head(xy.new)
+rL.polygon.new <- HmscRandomLevel(sData = xy.new, longlat = TRUE)
+rL.polygon.new <- setPriors(rL.polygon.new, nfMin = 1, nfMax = 5) 
+rL.polygon.new$s
+
+xy.all = rbind(xy.old, xy.new)
+rL.polygon.new$pi = study.design.all[,1]
+rL.polygon.new$s = xy.all
+save(rL.polygon.new, file = "rL.polygon.new.R")
+
+years.old <- data.frame(year = unique(study.design$year))
+rownames(years.old) <- years.old$year
+sum(duplicated(years.old))
+rL.year <- HmscRandomLevel(units = (unique(years.old$year)), longlat = FALSE)
+rL.year <- setPriors(rL.year, nfMin = 1, nfMax = 5)
+rL.year$pi
+
+head(env.grid.coords)
+env.grid.coords.data <- env.grid.coords %>%
+  dplyr::select(-env.latitude, -env.longitude, -year, -index, -grid.longitude, -grid.latitude)
+head(env.grid.coords.data)
+head(study.design.new)
+
+head(env.grid.polygons)
+env.grid.polygons.data <- env.grid.polygons %>%
+  dplyr::select(-env.latitude, -env.longitude, -year, -index, -grid.longitude, -grid.latitude) %>%
+  st_drop_geometry()
+head(env.grid.polygons.data)
+
+head(study.design.new)
+head(env.grid.polygons.data)
+save(abundance.model, study.design.new, env.grid.polygons.data, rL.polygon.new, rL.year, file="predict_abundance")
+
+# ## Done on VS Code
+# load("predict_abundance")
+# 
+# start.time <- Sys.time()
+# start.time
+# pred_abundance = predict(abundance.model, studyDesign=study.design.new, XData=env.grid.polygons.data, ranLevels=list(site=rL.polygon.new, year=rL.year),
+#                          expected=TRUE, predictEtaMean=TRUE)
+# print(Sys.time() - start.time)  # Print time taken for merging
+# 
+# start.time <- Sys.time()
+# start.time
+# save(pred_abundance_3D, file="pred_abundance")
+# print(Sys.time() - start.time)  # Print time taken for merging
+# print("saved pred_abundance")
+# 
+# pred_abundance = apply(abind(pred_abundance,along=3),c(1,2),mean)
+# save(pred_abundance, file="pred_abundance")
+# print("saved pred_abundance")
+# load("pred_abundance")
+# 
+# head(pred_abundance)
+# ncol(pred_abundance)
+# nrow(pred_abundance)
+# # 17481 = 939 polygons x 19 years
+
+##### COMBINE OCCURRENCE X ABUNDANCE FOR PREDICTIONS #####
+load("pred_abundance")
+load("pred_occurrence")
+
+all(sapply(pred_abundance, is.numeric))
+pred_abundance <- as.numeric(pred_abundance)
+all(sapply(pred_abundance, is.numeric))
+
+pred_HURDLE <- pred_occurrence * exp(pred_abundance)
+
+start.time <- Sys.time()
+start.time
+save(pred_HURDLE, file="pred_HURDLE")
+print(Sys.time() - start.time)  # Print time taken for merging
+print("saved pred_HURDLE")
+
+pred_HURDLE = apply(abind(pred_HURDLE,along=3),c(1,2),mean)
+save(pred_HURDLE, file="pred_HURDLE")
+print("saved pred_HURDLE")
+
+# head(pred_HURDLE)
+ncol(pred_HURDLE)
+nrow(pred_HURDLE)
+# 17481 = 939 polygons x 19 years
+
+# Species trait data
+traits <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
+  dplyr::select(species, fecundity, max.body.size, trophic.level) %>%
+  mutate(log_fecundity = log(fecundity)) %>%
+  dplyr::select(-fecundity) %>%
+  na.omit()
+
+pred_HURDLE.b <- as.data.frame(pred_HURDLE)
+pred_HURDLE.b$value <- rownames(pred_HURDLE.b)
+pred_HURDLE.b$value <- as.numeric(pred_HURDLE.b$value)
+
+# Assign true cell number to each value
+pred_HURDLE.b$cell <- ceiling(seq_along(1:nrow(pred_HURDLE.b))/19)
+
+# Change dataframe format from wide to long
+pred_HURDLE_species_sums <- gather(pred_HURDLE.b, key = "species", value = "sum", -value, -cell)
+
+# Join traits data to species data
+pred_HURDLE_cwm <- dplyr::left_join(pred_HURDLE_species_sums, traits, by = "species")
+#load("pred_HURDLE_cwm")
+#pred_HURDLE_cwm$cell <- as.numeric(pred_HURDLE_cwm$cell)
+
+print(range(pred_HURDLE_cwm$max.body.size, na.rm=TRUE))
+print(range(pred_HURDLE_cwm$trophic.level, na.rm=TRUE))
+print(range(pred_HURDLE_cwm$log_fecundity, na.rm=TRUE))
+print(range(pred_HURDLE_cwm$cell, na.rm=TRUE))
+
+# Calculate average of each trait at each cell
+pred_HURDLE_cwm_sums <- pred_HURDLE_cwm %>%
+  group_by(cell) %>%
+  summarize(           # Coding for how we want our CWMs summarized
+    max.body.size.cwm = weighted.mean(max.body.size, sum, na.rm = TRUE),   # Actual calculation of CWMs
+    trophic.level.cwm = weighted.mean(trophic.level, sum, na.rm = TRUE),
+    log.fecundity.cwm = weighted.mean(log_fecundity, sum, na.rm = TRUE)
+  )
+save(pred_HURDLE_cwm_sums, file="pred_HURDLE_cwm_sums")
+print("saved pred_HURDLE_cwm_sums")
+print("finished")
+
+# Join polygon boundaries to cwm species sums
+load("grid.coords.R")
+load("pred_HURDLE_cwm_sums")
+load("grid_geo")
+pred_HURDLE_cwm_sums$cell <- as.numeric(pred_HURDLE_cwm_sums$cell)
+grid.coords.polygon <- grid.coords
+grid.coords.polygon$cell <- row.names(grid.coords.polygon)  
+grid.coords.polygon$cell <- as.numeric(grid.coords.polygon$cell)
+pred_HURDLE_cwm_sums <- dplyr::left_join(grid.coords.polygon, pred_HURDLE_cwm_sums, by = "cell", keep = TRUE)
+pred_HURDLE_cwm_sums.b <- pred_HURDLE_cwm_sums %>%
+  dplyr::select(-cell.x) %>%
+  dplyr::rename(
+    cell = cell.y) %>%
+  dplyr::mutate(bind_cols(grid_geo))
+grid.coords.polygon.geo <- bind_cols(grid.coords.polygon, grid_geo)
 
 # Plot
-gamma.heatmap.occurrence <- ggplot(temp.gamma, aes(x = param, y = trait)) +
-  geom_tile(aes(fill = pos.neg), color = 'lightgray', linewidth = 0.25) +
-  scale_fill_manual(
-    values = c("1" = "red", "0" = "white", "-1" = "blue"),  # Map levels to colors
-    labels = c("1" = "+", "0" = "0", "-1" = "-"),           # Legend labels
-    name = "", 
-    guide = guide_legend(keyheight = 1, keywidth = 0.6),
-    drop = FALSE  # Ensure unused levels are not dropped
+grid.coords.polygon.geo.sf <- st_as_sf(grid.coords.polygon.geo)
+pred_HURDLE_cwm_sums.sf <- st_as_sf(pred_HURDLE_cwm_sums.b)
+
+max.body.size.cwm <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "NA", 
+    color = "NA"
   ) +
-  theme_classic() +
-  labs(y = NULL, x = NULL) +
+  geom_sf(
+    data = pred_HURDLE_cwm_sums.sf, 
+    aes(fill = max.body.size.cwm), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(29.55, 89.05)) +
+  labs(fill = "Maximum\nLength",
+       #tag = "a"
+       ) +
+  theme_minimal() +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels
-    axis.text.y = element_text(size = 8),  # Y-axis tick label size
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
     legend.text = element_text(size = 6),  # Legend text size
-    legend.key.size = unit(0.4, "cm")  # Adjust legend key size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
   )
-gamma.heatmap.occurrence
-ggsave("gamma.heatmap.occurrence.tiff", plot=gamma.heatmap.occurrence, device="tiff", width=10, height=9, units="cm", dpi=300)
+
+trophic.level.cwm <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "NA", 
+    color = "NA"
+  ) +
+  geom_sf(
+    data = pred_HURDLE_cwm_sums.sf, 
+    aes(fill = trophic.level.cwm), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(3.19, 4.04)) +
+  labs(fill = "Trophic\nLevel",
+       #tag = "b"
+       ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+  )
+
+log.fecundity.cwm <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "NA", 
+    color = "NA"
+  ) +
+  geom_sf(
+    data = pred_HURDLE_cwm_sums.sf, 
+    aes(fill = log.fecundity.cwm), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(8.41, 13.99)) +
+  labs(fill = "Fecundity\n(Logged)",
+       #tag = "c"
+       ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+  )
+
+max.body.size.cwm
+ggsave("max.body.size.cwm.tiff", plot=max.body.size.cwm, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+trophic.level.cwm
+ggsave("trophic.level.cwm.tiff", plot=trophic.level.cwm, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+log.fecundity.cwm
+ggsave("log.fecundity.cwm.tiff", plot=log.fecundity.cwm, device="tiff", width=9, height=9, units="cm", dpi=300)
 
 
 
 
 
-# Figure 6. Predicted CWM and diversity ----------------------------------------------------
+# Figure 5 (D-E). Predicted Diversity ----------------------------------------------------
+# Obs! Polar front was estimated and drawn on top of this figure in Inkscape
+load("pred_HURDLE")
+pred_HURDLE <- as.data.frame(pred_HURDLE)
+pred_HURDLE$value <- rownames(pred_HURDLE)
+pred_HURDLE$value <- as.numeric(pred_HURDLE$value)
+
+# Assign true cell number to each value
+pred_HURDLE$cell <- ceiling(seq_along(1:nrow(pred_HURDLE))/19)
+
+# Change dataframe format from wide to long
+pred_HURDLE_species_sums <- gather(pred_HURDLE, key = "species", value = "sum", -value, -cell)
+# 9,202,688 rows = 75 species x 19 years x 5504 cells 
+# Each year in each cell gets its own "value" value 
+
+# Calculate total sum of individuals of each species at each cell
+pred_HURDLE_species_sums.b <- pred_HURDLE_species_sums %>%
+  group_by(cell, species) %>%
+  summarise(species_cell_sum = sum(sum))
+
+pred_HURDLE_species_sums.c <- pivot_wider(pred_HURDLE_species_sums.b, names_from = species, values_from = species_cell_sum)
+which(pred_HURDLE_species_sums.c < 0, arr.ind = TRUE)
+which(pred_HURDLE_species_sums.c < 20, arr.ind = TRUE)
+
+shannon_by_group <- pred_HURDLE_species_sums.c %>%
+  group_by(cell) %>%
+  summarise(ShannonIndex = diversity(across(1:75), index = "shannon"))
+row_sums <- rowSums(pred_HURDLE_species_sums.c[, -1])
+
+shannon_by_group <- dplyr::left_join(grid.coords.polygon, shannon_by_group, by = "cell", keep = TRUE)
+shannon_by_group.b <- shannon_by_group %>%
+  dplyr::select(-cell.x) %>%
+  dplyr::rename(
+    cell = cell.y) %>%
+  dplyr::mutate(bind_cols(grid_geo))
+
+grid.coords.polygon.geo.sf <- st_as_sf(grid.coords.polygon.geo)
+shannon_by_group_sf <- st_as_sf(shannon_by_group.b)
+
+shannon.diversity.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = shannon_by_group_sf, 
+    aes(fill = ShannonIndex), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(0.87, 3.21)) +
+  labs(fill = "Shannon Diversity\nIndex",
+       #tag = "a"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+  )
+shannon.diversity.plot
+ggsave("shannon.diversity.plot.tiff", plot=shannon.diversity.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+# Bray-Curtis Dissimilarity Index
+bray_curtis <- vegdist(pred_HURDLE_species_sums.c, method = "bray")
+bray_curtis_df <- as.data.frame(as.matrix(bray_curtis))
+rownames(bray_curtis_df) <- pred_HURDLE_species_sums.c$cell
+colnames(bray_curtis_df) <- pred_HURDLE_species_sums.c$cell
+head(bray_curtis_df)
+
+bray.curtis.mean <- rowMeans(bray_curtis_df)
+bray.curtis.mean <- as.data.frame(bray.curtis.mean)
+bray.curtis.mean <- bray.curtis.mean %>%
+  rename(dissimilarity = bray.curtis.mean) %>%
+  rownames_to_column(var = "cell") 
+bray.curtis.mean$cell <- as.numeric(bray.curtis.mean$cell)
+bray.curtis.mean <- left_join(bray.curtis.mean, grid.coords.polygon, by = "cell")
+bray.curtis.mean.b <- bray.curtis.mean %>%
+  mutate(bind_cols(grid_geo))
+bray.curtis.mean.sf <- st_as_sf(bray.curtis.mean.b)
+
+bray.curtis.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = bray.curtis.mean.sf, 
+    aes(fill = dissimilarity), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(0.40, 0.91)) +
+  labs(fill = "Bray-Curtis\nDissimilarity Index",
+       #tag = "b"
+       ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+  )
+bray.curtis.plot
+
+st_geometry_type(sea_grid)
+sea_grid.b <- sea_grid[st_geometry_type(sea_grid) != "POINT", ]
+bray_curtis <- as.matrix(bray_curtis)
+
+neighbors <- poly2nb(sea_grid.b, queen = TRUE)  # `queen = TRUE` considers shared edges/vertices
+
+# Function to get neighbors up to N rings
+get_neighbors_n_rings <- function(neighbors, focal_hexagon, n_rings) {
+  # Initialize the set of neighbors
+  current_ring <- neighbors[[focal_hexagon]]  # Start with the first ring
+  all_neighbors <- current_ring  # Store all neighbors found so far
+  
+  # Iteratively find neighbors for each ring
+  for (ring in 2:n_rings) {
+    # Get neighbors of the current ring
+    next_ring <- unique(unlist(neighbors[current_ring]))
+    
+    # Exclude already visited hexagons (to avoid duplicates)
+    next_ring <- setdiff(next_ring, c(focal_hexagon, all_neighbors))
+    
+    # Add the new neighbors to the list of all neighbors
+    all_neighbors <- unique(c(all_neighbors, next_ring))
+    
+    # Update the current ring to the next ring
+    current_ring <- next_ring
+  }
+  
+  return(all_neighbors)
+}
+# Initialize a list to store results for N rings of neighbors
+n_ring_dissimilarity <- list()
+# Define the number of rings (e.g., 5 rings)
+n_rings <- 20
+# 13.8km*2=27.6km between centroids of hexagons
+# 27.6km*20 = 552km (comparing each focal hexagon with the communities within 552km of itself)
+
+# Loop through each hexagon
+for (i in seq_along(neighbors)) {
+  # Get the indices of neighbors up to N rings
+  n_ring_neighbors <- get_neighbors_n_rings(neighbors, i, n_rings)
+  
+  # Extract Bray-Curtis dissimilarity values for the focal hexagon and its N-ring neighbors
+  dissimilarity_values <- bray_curtis[i, n_ring_neighbors]
+  
+  # Store the results in a list
+  n_ring_dissimilarity[[i]] <- data.frame(
+    focal_hexagon = i,
+    neighbor_hexagon = n_ring_neighbors,
+    bray_curtis = dissimilarity_values
+  )
+}
+# Combine all results into a single data frame
+n_ring_dissimilarity_df <- do.call(rbind, n_ring_dissimilarity)
+
+# Calculate summary statistics for each focal hexagon
+n_ring_summary_stats <- n_ring_dissimilarity_df %>%
+  group_by(focal_hexagon) %>%
+  summarize(
+    mean_dissimilarity = mean(bray_curtis),
+    median_dissimilarity = median(bray_curtis),
+    min_dissimilarity = min(bray_curtis),
+    max_dissimilarity = max(bray_curtis)
+  )
+
+# Join summary statistics to the hexagon grid
+sea_grid.b$n_ring_mean_dissimilarity <- n_ring_summary_stats$mean_dissimilarity
+# Plot the mean dissimilarity
+ggplot() +
+  geom_sf(data = sea_grid.b, aes(fill = n_ring_summary_stats$mean_dissimilarity), color = "NA") +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  labs(title = "Mean Bray-Curtis Dissimilarity for Each Hexagon's Neighbors (3 Rings)")
+
+bray.curtis.mean.20 <- n_ring_summary_stats$mean_dissimilarity %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "cell") %>%
+  rename("dissimilarity" = ".")
+bray.curtis.mean.20$cell <- as.numeric(bray.curtis.mean.20$cell)
+bray.curtis.mean.20 <- left_join(bray.curtis.mean.20, grid.coords.polygon, by = "cell")
+grid_geo.b <- sea_grid[st_geometry_type(grid_geo) != "POINT", ]
+bray.curtis.mean.20.b <- bray.curtis.mean.20 %>%
+  mutate(bind_cols(grid_geo.b))
+bray.curtis.mean.20.sf <- st_as_sf(bray.curtis.mean.20.b)
+
+bray.curtis.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = bray.curtis.mean.20.sf, 
+    aes(fill = dissimilarity), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(0.13, 0.80)) +
+  labs(fill = "Bray-Curtis\nDissimilarity Index",
+       #tag = "b"
+       ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+  )
+bray.curtis.plot
+ggsave("bray.curtis.20.plot.tiff", plot=bray.curtis.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
 
 
 
 
 
-# Supporting Information Figure 1. Variance partitioning ----------------------------------------------------
+# Supporting Information Figure 1. Correlation between environmental covariates ----------------------------------------------------
 # See script "03 Test for correlation among traits and environmental covariates"
 
 
 
 
 
-# Supporting Information Figure 2. Variance partitioning ----------------------------------------------------
+# Supporting Information Figure 2. Correlation between traits ----------------------------------------------------
 # See script "03 Test for correlation among traits and environmental covariates"
 
 
@@ -515,6 +1226,7 @@ ggsave("gamma.heatmap.occurrence.tiff", plot=gamma.heatmap.occurrence, device="t
 
 
 # Supporting Information Figure 5. Variance partitioning ----------------------------------------------------
+##### OCCURRENCE MODEL #####
 head(occurrence.model$X)
 occurrence.model$covNames
 
@@ -607,11 +1319,13 @@ vp.species.occurrence.model.plot
 ggsave("variance.paritioning.occurrence.tiff", plot=vp.species.occurrence.model.plot, device="tiff", width=15, height=9, units="cm", dpi=300)
 print("variance partitioning per species plot saved") 
 
+##### ABUNDANCE MODEL #####
 
 
 
 
 # Supplementary Figure 6. Beta heatmap ----------------------------------------------------
+##### OCCURRENCE MODEL #####
 beta = getPostEstimate(occurrence.model, "Beta")
 # Remove edge lengths and plot the phylogenetic tree
 taxo.b <- taxo
@@ -686,7 +1400,63 @@ beta.heatmap.occurrence <- ggplot(temp.beta, aes(x = Environment, y = Species_so
         legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
         plot.title = NULL)
 
-# Heatmap for abundance model
+##### ABUNDANCE MODEL #####
+beta = getPostEstimate(abundance.model, "Beta")
+# Remove edge lengths and plot the phylogenetic tree
+taxo.b <- taxo
+taxo.b$edge.length <- NULL  # Remove edge lengths
+tree_plot_a <- ggtree(taxo.b, branch.length = "none", ladderize = TRUE) + 
+  geom_tiplab(fontface = "italic", size = 2) + 
+  xlim(0.1, 22) +
+  theme(plot.margin = margin(0, 0, 0, 5))  # Adjust margins
+tree_plot_a
+
+# Extract and process beta mean and support values
+temp.beta <- as.data.frame(beta$mean) %>%
+  mutate(param = abundance.model$covNames) %>%
+  pivot_longer(-param, names_to = "species", values_to = "value")
+sup.beta <- as.data.frame(beta$support) %>%
+  mutate(param = abundance.model$covNames) %>%
+  pivot_longer(-param, names_to = "species", values_to = "support")
+
+# Combine mean and support data
+temp.beta <- temp.beta %>%
+  left_join(sup.beta, by = c("param", "species")) %>%
+  mutate(
+    pos.neg = case_when(
+      support > 0.95 ~ 1,
+      support < 0.05 ~ -1,
+      TRUE ~ 0
+    ),
+    pos.neg = factor(pos.neg, levels = c(1, 0, -1))  # Ensure consistent legend order
+  )
+
+# Rename environmental variables
+temp.beta <- temp.beta %>%
+  filter(param != "(Intercept)") %>%
+  mutate(
+    Environment = recode(param,
+                         "SST" = "SST",
+                         "SBT" = "SBT",
+                         "SBS" = "SBS",
+                         "log_depth" = "Depth (Logged)",
+                         "ice_days" = "Sea Ice",
+                         "mixed_layer" = "Mixed Layer Depth",
+                         "SST_seasonality" = "SST Seasonality",
+                         "SBT_seasonality" = "SBT Seasonality",
+                         "SBS_seasonality" = "SBS Seasonality"
+    ),
+    Environment = factor(Environment, levels = c(
+      "SST", "SBT", "SBS", "Depth (Logged)", "Sea Ice", 
+      "Mixed Layer Depth", "SST Seasonality", "SBT Seasonality", "SBS Seasonality"
+    ))
+  )
+
+# Set species order to match phylogenetic tree
+sp_order <- get_taxa_name(tree_plot_a)
+temp.beta <- temp.beta %>%
+  mutate(Species_sort = factor(species, levels = rev(sp_order)))
+
 beta.heatmap.abundance <- ggplot(temp.beta, aes(x = Environment, y = Species_sort)) +
   geom_tile(aes(fill=pos.neg),color='black')+
   scale_fill_manual(values=c('red','white','blue'),
@@ -720,6 +1490,63 @@ ggsave("combined.beta.plot.pdf", plot = combined.beta.plot, device = "pdf", widt
 
 
 # Supplementary Figure 7. Beta barplot ----------------------------------------------------
+##### OCCURRENCE MODEL #####
+beta = getPostEstimate(occurrence.model, "Beta")
+# Remove edge lengths and plot the phylogenetic tree
+taxo.b <- taxo
+taxo.b$edge.length <- NULL  # Remove edge lengths
+tree_plot_a <- ggtree(taxo.b, branch.length = "none", ladderize = TRUE) + 
+  geom_tiplab(fontface = "italic", size = 2) + 
+  xlim(0.1, 22) +
+  theme(plot.margin = margin(0, 0, 0, 5))  # Adjust margins
+tree_plot_a
+
+# Extract and process beta mean and support values
+temp.beta <- as.data.frame(beta$mean) %>%
+  mutate(param = occurrence.model$covNames) %>%
+  pivot_longer(-param, names_to = "species", values_to = "value")
+sup.beta <- as.data.frame(beta$support) %>%
+  mutate(param = occurrence.model$covNames) %>%
+  pivot_longer(-param, names_to = "species", values_to = "support")
+
+# Combine mean and support data
+temp.beta <- temp.beta %>%
+  left_join(sup.beta, by = c("param", "species")) %>%
+  mutate(
+    pos.neg = case_when(
+      support > 0.95 ~ 1,
+      support < 0.05 ~ -1,
+      TRUE ~ 0
+    ),
+    pos.neg = factor(pos.neg, levels = c(1, 0, -1))  # Ensure consistent legend order
+  )
+
+# Rename environmental variables
+temp.beta <- temp.beta %>%
+  filter(param != "(Intercept)") %>%
+  mutate(
+    Environment = recode(param,
+                         "SST" = "SST",
+                         "SBT" = "SBT",
+                         "SBS" = "SBS",
+                         "log_depth" = "Depth (Logged)",
+                         "ice_days" = "Sea Ice",
+                         "mixed_layer" = "Mixed Layer Depth",
+                         "SST_seasonality" = "SST Seasonality",
+                         "SBT_seasonality" = "SBT Seasonality",
+                         "SBS_seasonality" = "SBS Seasonality"
+    ),
+    Environment = factor(Environment, levels = c(
+      "SST", "SBT", "SBS", "Depth (Logged)", "Sea Ice", 
+      "Mixed Layer Depth", "SST Seasonality", "SBT Seasonality", "SBS Seasonality"
+    ))
+  )
+
+# Set species order to match phylogenetic tree
+sp_order <- get_taxa_name(tree_plot_a)
+temp.beta <- temp.beta %>%
+  mutate(Species_sort = factor(species, levels = rev(sp_order)))
+
 # Combine temp.beta and species.regions
 beta.species.regions <- left_join(temp.beta, species.regions)
 
@@ -795,27 +1622,788 @@ beta.region.pos.neg <- ggplot(beta.species.regions.b) +
 
 ggsave("beta.region.pos.neg.occurrence.tiff", plot=beta.region.pos.neg.occurrence, device="tiff", width=25, height=10, units="cm", dpi=300)
 
+##### ABUNDANCE MODEL #####
+beta = getPostEstimate(abundance.model, "Beta")
+# Remove edge lengths and plot the phylogenetic tree
+taxo.b <- taxo
+taxo.b$edge.length <- NULL  # Remove edge lengths
+tree_plot_a <- ggtree(taxo.b, branch.length = "none", ladderize = TRUE) + 
+  geom_tiplab(fontface = "italic", size = 2) + 
+  xlim(0.1, 22) +
+  theme(plot.margin = margin(0, 0, 0, 5))  # Adjust margins
+tree_plot_a
+
+# Extract and process beta mean and support values
+temp.beta <- as.data.frame(beta$mean) %>%
+  mutate(param = abundance.model$covNames) %>%
+  pivot_longer(-param, names_to = "species", values_to = "value")
+sup.beta <- as.data.frame(beta$support) %>%
+  mutate(param = abundance.model$covNames) %>%
+  pivot_longer(-param, names_to = "species", values_to = "support")
+
+# Combine mean and support data
+temp.beta <- temp.beta %>%
+  left_join(sup.beta, by = c("param", "species")) %>%
+  mutate(
+    pos.neg = case_when(
+      support > 0.95 ~ 1,
+      support < 0.05 ~ -1,
+      TRUE ~ 0
+    ),
+    pos.neg = factor(pos.neg, levels = c(1, 0, -1))  # Ensure consistent legend order
+  )
+
+# Rename environmental variables
+temp.beta <- temp.beta %>%
+  filter(param != "(Intercept)") %>%
+  mutate(
+    Environment = recode(param,
+                         "SST" = "SST",
+                         "SBT" = "SBT",
+                         "SBS" = "SBS",
+                         "log_depth" = "Depth (Logged)",
+                         "ice_days" = "Sea Ice",
+                         "mixed_layer" = "Mixed Layer Depth",
+                         "SST_seasonality" = "SST Seasonality",
+                         "SBT_seasonality" = "SBT Seasonality",
+                         "SBS_seasonality" = "SBS Seasonality"
+    ),
+    Environment = factor(Environment, levels = c(
+      "SST", "SBT", "SBS", "Depth (Logged)", "Sea Ice", 
+      "Mixed Layer Depth", "SST Seasonality", "SBT Seasonality", "SBS Seasonality"
+    ))
+  )
+
+# Set species order to match phylogenetic tree
+sp_order <- get_taxa_name(tree_plot_a)
+temp.beta <- temp.beta %>%
+  mutate(Species_sort = factor(species, levels = rev(sp_order)))
+
+# Combine temp.beta and species.regions
+beta.species.regions <- left_join(temp.beta, species.regions)
+
+# Group and summarize data
+beta.species.regions.b <- beta.species.regions %>%
+  group_by(Environment, pos.neg, region) %>%
+  count() %>%
+  mutate(pos.neg = case_when(
+    pos.neg == -1 ~ "-",  # Replace -1 with "-"
+    pos.neg == 0 ~ "0",   # Replace 0 with "0"
+    pos.neg == 1 ~ "+"    # Replace 1 with "+"
+  ))
+
+# Summarize across all regions 
+beta.species.regions.c <- beta.species.regions %>%
+  group_by(Environment, pos.neg) %>%
+  count() %>%
+  filter(pos.neg != "0")
+
+# Create the plot
+beta.region.pos.neg <- ggplot(beta.species.regions.b) +
+  geom_bar(
+    aes(x = pos.neg, y = n, fill = region),
+    position = "stack",
+    stat = "identity"
+  ) +
+  facet_grid(
+    ~ Environment, switch = "x",
+    labeller = as_labeller(c(
+      "SST" = "SST",
+      "SBT" = "SBT",
+      "SBS" = "SBS",
+      "Depth (Logged)" = "Depth\n(Logged)",
+      "Sea Ice" = "Sea Ice",
+      "Mixed Layer Depth" = "Mixed\nLayer Depth",
+      "SST Seasonality" = "SST\nSeasonality",
+      "SBT Seasonality" = "SBT\nSeasonality",
+      "SBS Seasonality" = "SBS\nSeasonality"
+    ))
+  ) +
+  scale_fill_manual(
+    values = c("A" = "dodgerblue", "B" = "red2", "AB" = "green2"),
+    labels = c("Arctic", "Arcto-Boreal", "Boreal")
+  ) +
+  scale_x_discrete(limits = c("+", "0", "-")) + 
+  scale_y_continuous(
+    limits = c(0, 65),  
+    breaks = seq(0, 65, by = 5) 
+  ) +
+  labs(
+    x = "Environment",
+    y = "Number of Species",
+    fill = "Region"
+  ) +
+  theme_classic() +
+  theme(
+    strip.placement = "outside",
+    strip.background = element_rect(fill = NA, color = "white"),
+    panel.spacing = unit(0, "cm"),
+    strip.text = element_text(size = 8), 
+    axis.text.y = element_text(size = 6),
+    axis.text.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.title.x = element_blank(),
+    legend.text = element_text(size = 6), 
+    legend.title = element_text(size = 6),
+    legend.key.size = unit(0.4, "cm"),
+    plot.title = element_blank(), 
+    panel.grid.major = element_line(color = "lightgray", size = 0.25),  # Add light gray major grid lines
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white", color = NA)  # Ensure a shared background
+  )
+
+ggsave("beta.region.pos.neg.abundance.tiff", plot=beta.region.pos.neg.abundance, device="tiff", width=25, height=10, units="cm", dpi=300)
+
+
+
+
+
+# Supplementary Figure 8. Gamma heatmap ----------------------------------------------------
+##### OCCURRENCE MODEL #####
+# Extract and process gamma estimates
+gamma <- getPostEstimate(occurrence.model, "Gamma")
+temp.gamma <- as.data.frame(gamma$mean) %>%
+  rename(
+    "Maximum Body Size" = "V1",
+    "Trophic Level" = "V2",
+    "Fecundity (Logged)" = "V3"
+  ) %>%
+  mutate(param = occurrence.model$covNames) %>%
+  pivot_longer(
+    cols = -param, 
+    names_to = "trait", 
+    values_to = "value"
+  )
+
+# Process support values
+sup.gamma <- as.data.frame(gamma$support) %>%
+  mutate(param = occurrence.model$covNames) %>%
+  pivot_longer(
+    cols = -param, 
+    names_to = "species", 
+    values_to = "support"
+  )
+
+temp.gamma <- temp.gamma %>%
+  mutate(support = sup.gamma$support)
+
+# Add support level and classify positive/negative effects
+supportLevel <- 0.95
+temp.gamma <- temp.gamma %>%
+  mutate(
+    pos.neg = case_when(
+      support > supportLevel ~ "1",
+      support < (1 - supportLevel) ~ "-1",
+      TRUE ~ "0"
+    )
+  )
+
+# Rename and reorder variables
+temp.gamma <- temp.gamma %>%
+  filter(param != "(Intercept)") %>%
+  mutate(
+    param = recode(param,
+                   "SST" = "SST",
+                   "SBT" = "SBT",
+                   "SBS" = "SBS",
+                   "log_depth" = "Depth (Logged)",
+                   "ice_days" = "Sea Ice",
+                   "mixed_layer" = "Mixed Layer Depth",
+                   "SST_seasonality" = "SST Seasonality",
+                   "SBT_seasonality" = "SBT Seasonality",
+                   "SBS_seasonality" = "SBS Seasonality"
+    ),
+    trait = factor(trait, levels = c("Maximum Body Size", "Trophic Level", "Fecundity (Logged)")),
+    param = factor(param, levels = c(
+      "SST", "SBT", "SBS", "Depth (Logged)", "Sea Ice", 
+      "Mixed Layer Depth", "SST Seasonality", "SBT Seasonality", "SBS Seasonality"
+    )),
+    pos.neg = factor(pos.neg, levels = c("1", "0", "-1"))  # Ensure consistent legend order
+  )
+
+# Plot
+gamma.heatmap.occurrence <- ggplot(temp.gamma, aes(x = param, y = trait)) +
+  geom_tile(aes(fill = pos.neg), color = 'lightgray', linewidth = 0.25) +
+  scale_fill_manual(
+    values = c("1" = "red", "0" = "white", "-1" = "blue"),  # Map levels to colors
+    labels = c("1" = "+", "0" = "0", "-1" = "-"),           # Legend labels
+    name = "", 
+    guide = guide_legend(keyheight = 1, keywidth = 0.6),
+    drop = FALSE  # Ensure unused levels are not dropped
+  ) +
+  theme_classic() +
+  labs(y = NULL, x = NULL) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels
+    axis.text.y = element_text(size = 8),  # Y-axis tick label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.key.size = unit(0.4, "cm")  # Adjust legend key size
+  )
+gamma.heatmap.occurrence
+ggsave("gamma.heatmap.occurrence.tiff", plot=gamma.heatmap.occurrence, device="tiff", width=10, height=9, units="cm", dpi=300)
+
+##### ABUNDANCE MODEL #####
+# Extract and process gamma estimates
+gamma <- getPostEstimate(abundance.model, "Gamma")
+temp.gamma <- as.data.frame(gamma$mean) %>%
+  rename(
+    "Maximum Body Size" = "V1",
+    "Trophic Level" = "V2",
+    "Fecundity (Logged)" = "V3"
+  ) %>%
+  mutate(param = abundance.model$covNames) %>%
+  pivot_longer(
+    cols = -param, 
+    names_to = "trait", 
+    values_to = "value"
+  )
+
+# Process support values
+sup.gamma <- as.data.frame(gamma$support) %>%
+  mutate(param = abundance.model$covNames) %>%
+  pivot_longer(
+    cols = -param, 
+    names_to = "species", 
+    values_to = "support"
+  )
+
+temp.gamma <- temp.gamma %>%
+  mutate(support = sup.gamma$support)
+
+# Add support level and classify positive/negative effects
+supportLevel <- 0.95
+temp.gamma <- temp.gamma %>%
+  mutate(
+    pos.neg = case_when(
+      support > supportLevel ~ "1",
+      support < (1 - supportLevel) ~ "-1",
+      TRUE ~ "0"
+    )
+  )
+
+# Rename and reorder variables
+temp.gamma <- temp.gamma %>%
+  filter(param != "(Intercept)") %>%
+  mutate(
+    param = recode(param,
+                   "SST" = "SST",
+                   "SBT" = "SBT",
+                   "SBS" = "SBS",
+                   "log_depth" = "Depth (Logged)",
+                   "ice_days" = "Sea Ice",
+                   "mixed_layer" = "Mixed Layer Depth",
+                   "SST_seasonality" = "SST Seasonality",
+                   "SBT_seasonality" = "SBT Seasonality",
+                   "SBS_seasonality" = "SBS Seasonality"
+    ),
+    trait = factor(trait, levels = c("Maximum Body Size", "Trophic Level", "Fecundity (Logged)")),
+    param = factor(param, levels = c(
+      "SST", "SBT", "SBS", "Depth (Logged)", "Sea Ice", 
+      "Mixed Layer Depth", "SST Seasonality", "SBT Seasonality", "SBS Seasonality"
+    )),
+    pos.neg = factor(pos.neg, levels = c("1", "0", "-1"))  # Ensure consistent legend order
+  )
+
+# Plot
+gamma.heatmap.abundance <- ggplot(temp.gamma, aes(x = param, y = trait)) +
+  geom_tile(aes(fill = pos.neg), color = 'lightgray', linewidth = 0.25) +
+  scale_fill_manual(
+    values = c("1" = "red", "0" = "white", "-1" = "blue"),  # Map levels to colors
+    labels = c("1" = "+", "0" = "0", "-1" = "-"),           # Legend labels
+    name = "", 
+    guide = guide_legend(keyheight = 1, keywidth = 0.6),
+    drop = FALSE  # Ensure unused levels are not dropped
+  ) +
+  theme_classic() +
+  labs(y = NULL, x = NULL) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels
+    axis.text.y = element_text(size = 8),  # Y-axis tick label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.key.size = unit(0.4, "cm")  # Adjust legend key size
+  )
+gamma.heatmap.abundance
+ggsave("gamma.heatmap.abundance.tiff", plot=gamma.heatmap.abundance, device="tiff", width=10, height=9, units="cm", dpi=300)
 
 
 
 
 
 # Supplementary Figure 8. Species abundance ----------------------------------------------------
+# Obs! Polar front was estimated and drawn on top of this figure in Inkscape
+load("pred_HURDLE")
+pred_HURDLE <- as.data.frame(pred_HURDLE)
+pred_HURDLE$value <- rownames(pred_HURDLE)
+pred_HURDLE$value <- as.numeric(pred_HURDLE$value)
+
+# Assign true cell number to each value
+pred_HURDLE$cell <- ceiling(seq_along(1:nrow(pred_HURDLE))/19)
+
+# Change dataframe format from wide to long
+pred_HURDLE_species_sums <- gather(pred_HURDLE, key = "species", value = "sum", -value, -cell)
+# 9,202,688 rows = 75 species x 19 years x 5504 cells 
+# Each year in each cell gets its own "value" value 
+
+# Calculate total sum of individuals of each species at each cell
+pred_HURDLE_species_sums.b <- pred_HURDLE_species_sums %>%
+  group_by(cell, species) %>%
+  summarise(species_cell_sum = sum(sum))
+
+pred_HURDLE_species_sums.c <- pivot_wider(pred_HURDLE_species_sums.b, names_from = species, values_from = species_cell_sum)
+which(pred_HURDLE_species_sums.c < 0, arr.ind = TRUE)
+which(pred_HURDLE_species_sums.c < 20, arr.ind = TRUE)
+
+row_sums <- rowSums(pred_HURDLE_species_sums.c[, -1])
+species.abundance <- data.frame(cell = pred_HURDLE_species_sums.c$cell, species.abundance = row_sums)
+
+species.abundance.cells <- dplyr::left_join(grid.coords.polygon, species.abundance, by = "cell", keep = TRUE)
+species.abundance.cells <- species.abundance.cells %>%
+  dplyr::select(-cell.x) %>%
+  dplyr::rename(
+    cell = cell.y) %>%
+  dplyr::mutate(bind_cols(grid_geo))
+
+grid.coords.polygon.geo.sf <- st_as_sf(grid.coords.polygon.geo)
+species.abundance.cells.sf <- st_as_sf(species.abundance.cells)
+
+species.abundance.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = species.abundance.cells.sf, 
+    aes(fill = species.abundance), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(1377, 57987)) +
+  labs(fill = "Abundance") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+  )
+species.abundance.plot
+ggsave("species.abundance.plot.tiff", plot=species.abundance.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
 
 
 
 
 
 # Supplementary Figure 9. Bray-Curits dissimilarity index ----------------------------------------------------
+See script "10 Plots", "Figure 5 (D-E). Predicted Diversity"
 
 
 
 
 
 # Supplementary Figure 10. Modeled environmental covariates from Copernicus ----------------------------------------------------
+# Obs! Polar front was estimated and drawn on top of this figure in Inkscape
+# Load data
+load("NOR-BTS_clean.RData")
+barents <- data
 
+# Convert to sf and reproject
+sf_barents <- st_as_sf(barents, coords = c("longitude", "latitude"), crs = 4326) %>%
+  st_transform(3035)
 
+# Generate concave hull and buffer (optional smoothing)
+# Just creates a general outline of a set of points
+hull_ba <- concaveman::concaveman(sf_barents, concavity = 2) %>%
+  st_buffer(dist = 5000)
 
+# Load land polygons and reproject
+land <- rnaturalearth::ne_countries(scale = "large", returnclass = "sf") %>%
+  sf::st_transform(3035)
+
+# Clean geometries
+hull_ba <- sf::st_make_valid(sf::st_zm(hull_ba))
+land <- sf::st_make_valid(sf::st_zm(land))
+
+# Remove land from the buffered hull
+sea_ba <- sf::st_difference(hull_ba, sf::st_union(land))
+
+# Visualize
+ggplot2::ggplot(sea_ba) + ggplot2::geom_sf()
+
+## Definine hexagons
+# Desired area of each hexagonal cell (e.g., 1,000,000 m² = 1 km²)
+hex_area <- 500000000  # Area in square meters 500,000,000
+# Calculate the side length of the hexagonal cells
+hex_side_length <- sqrt((2 * hex_area) / (3 * sqrt(3)))
+print(hex_side_length)  # Side length
+
+# Create a hexagonal grid over the extent of sea_ba
+grid_hex <- st_make_grid(sea_ba, cellsize = hex_side_length, square = FALSE)
+
+# Convert the hexagonal grid into an sf object
+grid_hex_sf <- st_sf(geometry = grid_hex)
+
+# Intersect the hexagonal grid with the sea_ba polygon
+sea_grid <- sf::st_intersection(grid_hex_sf, sea_ba)
+
+ggplot() +
+  geom_sf(data = sea_grid, fill = "lightblue", color = "black") +
+  theme_minimal() +
+  labs(title = "50km2 Area Hexagons")
+
+st_crs(sea_grid)
+grid_geo <- st_transform(sea_grid, crs = 4326)
+st_crs(grid_geo)
+
+grid_centroids <- st_centroid(grid_geo)
+grid.coords <- st_coordinates(grid_centroids)
+grid.coords <- grid.coords %>% 
+  as.data.frame() %>% 
+  rename(
+    latitude = Y,
+    longitude = X) 
+head(grid.coords)
+save(grid.coords, file = "grid.coords.R")
+
+## Completed in VSCode
+## Plot Copernicus ennvironmental covariates averaged across study period
+# # Read in Environmental Covariates Data
+# start.time <- Sys.time()
+# start.time
+# env.data <- fread("SST.SBT.SSS.SBS.depth.icedays.mlotst.seasonality.csv") 
+# 
+# env.data <- env.data %>%
+#   dplyr::rename(
+#     SST = thetao,
+#     SBT = bottomT,
+#     mixed_layer = mlotst,
+#     depth = model_depth
+#   )
+# print(Sys.time() - start.time)  # Print time taken for merging
+# head(env.data)
+# df <- env.data %>% sample_n(100)
+# print(df)
+# 
+# # Create new column with just month-day
+# env.data$month_day <- format(env.data$time, "%m-%d")
+# env.data$year <- format(env.data$time, "%y")
+# head(env.data)
+# 
+# # Define date boundaires
+# start_date <- "08-02"
+# end_date <- "10-08"
+# 
+# # Subset the data
+# subset_data <- env.data[env.data$month_day >= start_date & env.data$month_day <= end_date]
+# head(subset_data)
+# 
+# # Calculate the mean for each copernicus sample
+# env.data.mean.maps <- subset_data %>%
+#   group_by(latitude, longitude) %>%
+#   summarise(across(c(depth, SST, SBT, SSS, SBS, SST_seasonality,
+#                      SBT_seasonality, SSS_seasonality, SBS_seasonality,
+#                      mixed_layer, ice_days),mean),
+#             .groups = 'keep') %>%
+#   as.data.frame()
+# head(env.data.mean.maps)
+# df <- env.data.mean.maps %>% sample_n(100)
+# print(df)
+# 
+# write.csv(env.data.mean.maps, "env.data.mean.maps.b.csv")
+# print("Saved env.data.mean.maps.b")
+
+env.data.mean.maps <- fread("env.data.mean.maps.b.csv")
+env.data.mean.maps <- env.data.mean.maps %>%
+  dplyr::select(-V1)
+head(env.data.mean.maps)
+
+env.data.mean.maps_sf <- st_as_sf(env.data.mean.maps, coords = c("longitude", "latitude"), crs = 4326)
+st_crs(env.data.mean.maps_sf)
+st_crs(grid.coords.polygon.geo.sf)
+head(env.data.mean.maps_sf)
+head(grid.coords.polygon.geo.sf)
+
+joined_data <- st_join(env.data.mean.maps_sf, grid.coords.polygon.geo.sf, join = st_within)
+joined_data <- na.omit(joined_data)
+
+# Aggregate data by polygon
+aggregated_data <- joined_data %>%
+  group_by(cell) %>%
+  summarize(
+    mean_SBT = mean(SBT), 
+    mean_SST = mean(SST),
+    mean_SBS = mean(SBS),
+    mean_SSS = mean(SSS),
+    mean_depth = mean(depth),
+    mean_mixed_layer_depth = mean(mixed_layer),
+    mean_ice_days = mean(ice_days),
+    mean_SBT_seasonality = mean(SBT_seasonality),
+    mean_SST_seasonality = mean(SST_seasonality),
+    mean_SBS_seasonality = mean(SBS_seasonality),
+    mean_SSS_seasonality = mean(SSS_seasonality),
+    count_points = n() 
+  )
+
+final_data <- grid.coords.polygon.geo.sf %>%
+  st_join(aggregated_data) %>%
+  na.omit() %>%
+  dplyr::select(-cell.x) %>%
+  dplyr::rename(
+    cell = cell.y)
+
+SBT.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = final_data, 
+    aes(fill = mean_SBT), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(-0.9, 7.55)) +
+  labs(fill = "SBT") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_text(size = 8),  # X-axis label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.text = element_text(size = 10),  # Legend text size
+    legend.title = element_text(size = 10),  # Legend title size
+    legend.key.size = unit(0.6, "cm"),  # Make legend squares smaller
+  )
+SBT.plot
+ggsave("SBT.tiff", plot=SBT.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+SST.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = final_data, 
+    aes(fill = mean_SST), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(-1.69, 11.2)) +
+  labs(fill = "SST") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_text(size = 8),  # X-axis label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.text = element_text(size = 10),  # Legend text size
+    legend.title = element_text(size = 10),  # Legend title size
+    legend.key.size = unit(0.6, "cm"),  # Make legend squares smaller
+  )
+SST.plot
+ggsave("SST.tiff", plot=SST.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+SBS.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = final_data, 
+    aes(fill = mean_SBS), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(33.51, 35.15)) +
+  labs(fill = "SBS") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_text(size = 8),  # X-axis label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.text = element_text(size = 10),  # Legend text size
+    legend.title = element_text(size = 10),  # Legend title size
+    legend.key.size = unit(0.6, "cm"),  # Make legend squares smaller
+  )
+SBS.plot
+ggsave("SBS.tiff", plot=SBS.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+depth.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = final_data, 
+    aes(fill = mean_depth), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(16.1, 1645)) +
+  labs(fill = "Depth") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_text(size = 8),  # X-axis label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.text = element_text(size = 10),  # Legend text size
+    legend.title = element_text(size = 10),  # Legend title size
+    legend.key.size = unit(0.6, "cm"),  # Make legend squares smaller
+  )
+depth.plot
+ggsave("depth.tiff", plot=depth.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+mixed.layer.depth.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = final_data, 
+    aes(fill = mean_mixed_layer_depth), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(4.58, 22.44)) +
+  labs(fill = "Mixed\nLayer Depth") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_text(size = 8),  # X-axis label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.text = element_text(size = 10),  # Legend text size
+    legend.title = element_text(size = 10),  # Legend title size
+    legend.key.size = unit(0.6, "cm"),  # Make legend squares smaller
+  )
+mixed.layer.depth.plot
+ggsave("mixed.layer.depth.tiff", plot=mixed.layer.depth.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+ice.days.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = final_data, 
+    aes(fill = mean_ice_days), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(0, 357)) +
+  labs(fill = "Ice Days") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_text(size = 8),  # X-axis label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.text = element_text(size = 10),  # Legend text size
+    legend.title = element_text(size = 10),  # Legend title size
+    legend.key.size = unit(0.6, "cm"),  # Make legend squares smaller
+  )
+ice.days.plot
+ggsave("ice.days.tiff", plot=ice.days.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+SBT.seasonality.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = final_data, 
+    aes(fill = mean_SBT_seasonality), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(0, 1.03)) +
+  labs(fill = "SBT\nSeasonality") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_text(size = 8),  # X-axis label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.text = element_text(size = 10),  # Legend text size
+    legend.title = element_text(size = 10),  # Legend title size
+    legend.key.size = unit(0.6, "cm"),  # Make legend squares smaller
+  )
+SBT.seasonality.plot
+ggsave("SBT.seasonality.tiff", plot=SBT.seasonality.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+SST.seasonality.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = final_data, 
+    aes(fill = mean_SST_seasonality), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(0.1, 2.24)) +
+  labs(fill = "SST\nSeasonality") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_text(size = 8),  # X-axis label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.text = element_text(size = 10),  # Legend text size
+    legend.title = element_text(size = 10),  # Legend title size
+    legend.key.size = unit(0.6, "cm"),  # Make legend squares smaller
+  )
+SST.seasonality.plot
+ggsave("SST.seasonality.tiff", plot=SST.seasonality.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
+
+SBS.seasonality.plot <- ggplot() +
+  geom_sf(
+    data = grid.coords.polygon.geo.sf, 
+    fill = "white", 
+    color = "white"
+  ) +
+  geom_sf(
+    data = final_data, 
+    aes(fill = mean_SBS_seasonality), 
+    color = alpha(0.4)
+  ) +
+  scale_fill_gradientn(
+    colors = rev(brewer.pal(4, "Spectral")),
+    limits = c(0, 0.33)) +
+  labs(fill = "SBS\nSeasonality") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 6),  # X-axis tick label size
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_text(size = 8),  # X-axis label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.text = element_text(size = 10),  # Legend text size
+    legend.title = element_text(size = 10),  # Legend title size
+    legend.key.size = unit(0.6, "cm"),  # Make legend squares smaller
+  )
+SBS.seasonality.plot
+ggsave("SBS.seasonality.tiff", plot=SBS.seasonality.plot, device="tiff", width=9, height=9, units="cm", dpi=300)
 
 
 
@@ -1029,4 +2617,4 @@ plot_A <- create_plot(beta.groups[[1]])
 plot_AB <- create_plot(beta.groups[[2]])
 plot_B <- create_plot(beta.groups[[3]])
 
-# End script "10 Plots"
+# End script "10 Figures"
