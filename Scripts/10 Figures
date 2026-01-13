@@ -70,9 +70,7 @@ sampling.bathymetry.map <- basemap(limits = c(0, 50, 69, 83), bathy.style = "rcb
   )
 ggsave("sampling.bathymetry.map.tiff", plot=sampling.bathymetry.map, device="tiff", width=12, height=9, units="cm", dpi=300)
 
-########################################################################
-######### OCCURRENCE MODEL #############################################
-########################################################################
+##### OCCURRENCE MODEL #####
 
 # Load model
 load("occurrence_model_processed")
@@ -89,7 +87,22 @@ vp.occurrence.model$R2T$Y
 mean(vp.occurrence.model$R2T$Beta[-1])
 # How much do traits mediate the response to the environment 
 
+##### ABUNDANCE MODEL #####
 
+# Load model
+load("abundance_model_processed")
+load("HMSC_abundance")
+print("loaded")
+abundance.model <- abundance_model_processed
+mpost.abundance.model= convertToCodaObject(abundance.model)
+
+vp.abundance.model$R2T$Beta
+
+vp.abundance.model$R2T$Y
+# The proportion of variance in the species' responses explained by the model
+
+mean(vp.abundance.model$R2T$Beta[-1])
+# How much do traits mediate the response to the environment 
 
 
 
@@ -147,7 +160,7 @@ legend.labels <- setNames(
   mean.vp.occurrence.model$variable)
 
 # Plot
-vp.occurrence.model.plot.occurrence <- ggplot(t.vp.occurrence.model, aes(x = variable, y = value, fill = variable)) +
+vp.occurrence.model.plot <- ggplot(t.vp.occurrence.model, aes(x = variable, y = value, fill = variable)) +
   geom_violin(scale = "width", show.legend = TRUE, linewidth = 0.25) +
   stat_summary(fun = mean, geom = "point", size = 1, show.legend = FALSE, color = "black") +
   geom_vline(xintercept = length(fixed.variables$variable) + 0.5, linetype = "dashed") +  # Separate fixed and random
@@ -209,12 +222,124 @@ vp.occurrence.model.plot.occurrence <- ggplot(t.vp.occurrence.model, aes(x = var
     legend.text = element_text(size = 6),
     legend.key.size = unit(0.4, "cm")
   )
-vp.occurrence.model.plot.occurrence
-ggsave("variance.paritioning.all.occurrence.tiff", plot=vp.occurrence.model.plot.occurrence, device="tiff", width=15, height=9, units="cm", dpi=300)
+vp.occurrence.model.plot
+ggsave("variance.paritioning.all.occurrence.tiff", plot=vp.occurrence.model.plot, device="tiff", width=15, height=9, units="cm", dpi=300)
 print("variance partitioning plot saved") 
 
 ##### ABUNDANCE MODEL #####
+# Compute species-specific variance partitioning
+vp.abundance.model <- computeVariancePartitioning(abundance.model, group = group.vp.abundance.model, groupnames = groupnames.vp.abundance.model)
 
+# Transform variance partitioning results into a data frame and reshape for plotting
+t.vp.abundance.model <- data.frame(t(vp.abundance.model$vals))
+t.vp.abundance.model$Species <- rownames(t.vp.abundance.model)
+
+t.vp.abundance.model <- reshape2::melt(t.vp.abundance.model %>%
+                                  group_by(Species) %>%
+                                  summarise(
+                                    Depth = Depth,
+                                    SST = SST,
+                                    SBT = SBT,
+                                    SBS = SBS,
+                                    Mixed_Layer_Depth = Mixed_Layer_Depth,
+                                    SST_seasonality = SST_seasonality,
+                                    SBT_seasonality = SBT_seasonality,
+                                    SBS_seasonality = SBS_seasonality,
+                                    Sea_Ice = Sea_Ice,
+                                    Random..site = Random..site,
+                                    Random..year = Random..year),
+                                id = "Species")
+
+# Separate fixed and random variables
+mean.vp.abundance.model <- t.vp.abundance.model %>%
+  group_by(variable) %>%
+  summarise(Mean = mean(value, na.rm = TRUE)) %>%
+  mutate(
+    Type = ifelse(variable %in% c("Random..site", "Random..year"), "Random", "Fixed")
+  )
+fixed.variables <- mean.vp.abundance.model %>%
+  filter(Type == "Fixed") %>%
+  arrange(desc(Mean))  # Order fixed variables by decreasing mean
+random.variables <- mean.vp.abundance.model %>%
+  filter(Type == "Random")  # Keep random variables as is
+
+# Combine fixed and random variables
+final.order <- c(fixed.variables$variable, random.variables$variable)
+
+# Reorder the variables
+t.vp.abundance.model$variable <- factor(t.vp.abundance.model$variable, levels = final.order)
+
+# Create a named vector for legend labels in the correct order
+legend.labels <- setNames(
+  paste(mean.vp.abundance.model$variable, "=", round(mean.vp.abundance.model$Mean, 2)),
+  mean.vp.abundance.model$variable)
+
+# Plot
+vp.abundance.model.plot <- ggplot(t.vp.abundance.model, aes(x = variable, y = value, fill = variable)) +
+  geom_violin(scale = "width", show.legend = TRUE, linewidth = 0.25) +
+  stat_summary(fun = mean, geom = "point", size = 1, show.legend = FALSE, color = "black") +
+  geom_vline(xintercept = length(fixed.variables$variable) + 0.5, linetype = "dashed") +  # Separate fixed and random
+  annotate("text", x = c(length(fixed.variables$variable) / 2, length(fixed.variables$variable) + 1.5), 
+           y = c(0.9, 0.9), label = c("Fixed", "Random"), size = 3) +
+  scale_y_continuous(
+    limits = c(0, 1.00),
+    breaks = seq(0, 1.00, by = 0.10)
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Random..site" = "firebrick3",
+      "Random..year" = "lightcoral",
+      "Mixed_Layer_Depth" = "purple",
+      "Sea_Ice" = "yellow2",
+      "Depth" = "orange",
+      "SBS" = "green3",
+      "SBS_seasonality" = "green3",
+      "SST" = "cornflowerblue",
+      "SBT" = "cornflowerblue",
+      "SST_seasonality" = "cornflowerblue",
+      "SBT_seasonality" = "cornflowerblue"
+    ),
+    limits = levels(t.vp.abundance.model$variable),  # Use reordered factor levels
+    labels = legend.labels  # Use dynamic labels
+  ) +
+  scale_x_discrete(
+    labels = c(
+      "Random..site" = "Random Site",
+      "Random..year" = "Random Year",
+      "Mixed_Layer_Depth" = "Mixed Layer Depth",
+      "Sea_Ice" = "Sea Ice",
+      "Depth" = "Depth (Logged)",
+      "SBS" = "SBS",
+      "SBS_seasonality" = "SBS Seasonality",
+      "SST" = "SST",
+      "SBT" = "SBT",
+      "SST_seasonality" = "SST Seasonality",
+      "SBT_seasonality" = "SBT Seasonality"
+    )
+  ) +
+  labs(
+    y = "Proportion of explained variation",
+    x = NULL,
+    title = NULL
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8),
+    axis.text.y = element_text(size = 6),
+    axis.title.y = element_text(size = 8),
+    axis.title.x = element_blank(),
+    plot.title = element_text(size = 10, hjust = 0.5),
+    plot.margin = margin(0, 20, 0, 2),
+    panel.grid.major = element_line(color = "lightgray", size = 0.25),
+    panel.grid.minor = element_blank(),
+    legend.position = "right",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 6),
+    legend.key.size = unit(0.4, "cm")
+  )
+vp.abundance.model.plot
+ggsave("variance.paritioning.all.abundance.tiff", plot=vp.abundance.model.plot, device="tiff", width=15, height=9, units="cm", dpi=300)
+print("variance partitioning plot saved") 
 
 
 
@@ -276,6 +401,84 @@ species.to.label <- c("Gadus morhua", "Mallotus villosus","Leptagonus decagonus"
                       "Anarhichas lupus", "Microstomus kitt", "Pleuronectes platessa",
                       "Gaidropsarus argentatus", "Gadiculus argenteus", "Eumicrotremus spinosus")  # Occurrence
 
+pca.data$label <- ifelse(pca.data$species %in% species.to.label, pca.data$species, NA)
+
+# Plot
+pca.occurrence <- ggplot(pca.data, aes(x = PC1, y = PC2, color = region)) +
+  geom_point(size = 2) +
+  geom_segment(data = loadings, aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.2, "cm")), color = "black") +
+  geom_text_repel(data = loadings, aes(x = PC1, y = PC2, label = variable),
+                  size = 3, color = "black", max.overlaps = 20) +
+  geom_text_repel(aes(label = label, color = region), fontface = "italic", size = 3) +
+  scale_color_manual(
+    values = c("A" = "dodgerblue", "B" = "red2", "AB" = "green2"),
+    labels = c("A" = "Arctic", "B" = "Boreal", "AB" = "Arcto-Boreal"),
+    name = "Biogeographical\nGroup"
+  ) +
+  theme_classic() +
+  labs(
+    x = paste0("PC 1 (", round(summary(beta.pca)$importance[2, 1] * 100, 1), "%)"),
+    y = paste0("PC 2 (", round(summary(beta.pca)$importance[2, 2] * 100, 1), "%)"),
+    color = "Region"
+  )
+pca
+ggsave("pca.occurrence.tiff", plot = pca, device = "tiff", width = 25, height = 20, units = "cm", dpi = 300)
+
+# Identify outliers
+pca.scores.outliers <- as.data.frame(pca.scores) %>%
+  mutate(species = rownames(pca.scores)) %>%
+  arrange(desc(abs(PC1)))  # Sort by absolute PC1 scores
+outliers <- pca.scores.outliers[1:2, ]  # Top 2 outliers
+print(outliers)
+
+##### ABUNDANCE MODEL #####
+# Extract posterior means of beta parameters
+beta = getPostEstimate(abundance.model, "Beta")
+beta.matrix <- t(beta$mean)  # Transpose beta matrix
+colnames(beta.matrix) <- abundance.model$covNames  # Assign species names to columns
+rownames(beta.matrix) <- abundance.model$spNames  # Assign covariate names to rows
+beta.matrix <- beta.matrix[, colnames(beta.matrix) != "(Intercept)"]  # Remove intercept column
+
+# Perform PCA on the beta matrix
+beta.pca <- prcomp(beta.matrix, scale. = TRUE)
+pca.scores <- beta.pca$x  # PCA scores for species
+summary(beta.pca)  # Variance explained by each PC
+screeplot(beta.pca, type = "lines")
+
+# Merge PCA scores with species classification
+species.regions <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
+  dplyr::select(species, biogeographic.affinity) %>%
+  rename(region = biogeographic.affinity) %>%
+  mutate(region = case_when(
+    species == "Phycis blennoides" ~ "B",
+    species == "Lycenchelys muraena" ~ "A",
+    species == "Lycenchelys sarsii" ~ "B",
+    species == "Lycodes paamiuti" ~ "AB",
+    TRUE ~ region
+  ))
+write.table(species.regions, "species.regions.csv", sep = ";", row.names = FALSE, quote = TRUE)
+
+pca.data <- data.frame(pca.scores, species = rownames(pca.scores)) %>%
+  left_join(species.regions, by = "species") %>%
+  mutate(region = case_when(
+    species == "Phycis blennoides" ~ "B",
+    species == "Lycenchelys muraena" ~ "A",
+    species == "Lycenchelys sarsii" ~ "B",
+    species == "Lycodes paamiuti" ~ "AB",
+    TRUE ~ region
+  ))
+
+# Extract and scale loadings
+scaling.factor <- 0.5 * max(abs(pca.data$PC1), abs(pca.data$PC2))  # Scale based on plot range
+loadings <- as.data.frame(beta.pca$rotation) %>%
+  mutate(
+    variable = rownames(beta.pca$rotation),
+    PC1 = PC1 * scaling.factor,
+    PC2 = PC2 * scaling.factor
+  )
+
+# Highlight certain species
 species.to.label <- c("Gadus morhua", "Mallotus villosus","Leptagonus decagonus",
                       "Boreogadus saida", "Hippoglossus hippoglossus", "Melanogrammus aeglefinus", 
                       "Pollachius virens", "Reinhardtius hippoglossoides",
@@ -388,6 +591,74 @@ env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = Env
 env.traits.plot
 ggsave("env.explained.by.traits.occurrence.tiff", plot=env.traits.plot, device="tiff", width=10, height=9, units="cm", dpi=300)
 print("env.explained.variance.png")
+
+##### ABUNDANCE MODEL #####
+# Prepare data for plotting
+env.traits <- as.data.frame(vp.abundance.model$R2T$Beta[-1]) %>%
+  rename(value = "vp.abundance.model$R2T$Beta[-1]") %>%
+  mutate(
+    Environment = factor(
+      c("log_depth", "SST", "SBT", "SBS", "SST_seasonality", 
+        "SBT_seasonality", "SBS_seasonality", "mixed_layer", "sea_ice")
+    ),
+    value = round(value * 100, 0) 
+  ) %>%
+  arrange(desc(value))  # Sort by value in descending order
+
+# Reorder the environment factor based on sorted values
+env.traits$Environment <- factor(env.traits$Environment, levels = env.traits$Environment)
+
+# Plot
+env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = Environment)) +
+  geom_bar(stat = "identity", color = "black", linewidth = 0.25) +  # Barplot with black borders
+  geom_text(aes(label = value), vjust = -0.5, size = 2) +  # Add text above each bar
+  scale_fill_manual(values = c(
+    "Random..site" = "firebrick3",
+    "Random..year" = "lightcoral",
+    "mixed_layer" = "purple",
+    "sea_ice" = "yellow2",
+    "log_depth" = "orange",
+    "SBS" = "green3",
+    "SBS_seasonality" = "green3",
+    "SST" = "cornflowerblue",
+    "SBT" = "cornflowerblue",
+    "SST_seasonality" = "cornflowerblue",
+    "SBT_seasonality" = "cornflowerblue"
+  )) +
+  scale_x_discrete(
+    labels = c(
+      "mixed_layer" = "Mixed Layer Depth",
+      "sea_ice" = "Sea Ice",
+      "log_depth" = "Depth (Logged)",
+      "SBS" = "SBS",
+      "SBS_seasonality" = "SBS Seasonality",
+      "SST" = "SST",
+      "SBT" = "SBT",
+      "SST_seasonality" = "SST Seasonality",
+      "SBT_seasonality" = "SBT Seasonality"
+    )
+  ) +
+  scale_y_continuous(
+    limits = c(0, 18),  # Set the range of the y-axis
+    breaks = seq(0, 18, by = 2)  # Set y-axis breaks
+  ) +
+  labs(
+    y = "Percentage",  # Add y-axis label
+    x = NULL  # Remove x-axis label
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels
+    axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.y = element_text(size = 8),  # Y-axis label size
+    legend.position = "none",  # Remove legend
+    panel.grid.major = element_line(color = "lightgray", size = 0.25),  # Add light gray grid lines
+    panel.grid.minor = element_blank()  # Remove minor grid lines
+  )
+env.traits.plot
+ggsave("env.explained.by.traits.abundance.tiff", plot=env.traits.plot, device="tiff", width=10, height=9, units="cm", dpi=300)
+print("env.explained.variance.png")
+
 
 
 
@@ -1320,6 +1591,98 @@ ggsave("variance.paritioning.occurrence.tiff", plot=vp.species.occurrence.model.
 print("variance partitioning per species plot saved") 
 
 ##### ABUNDANCE MODEL #####
+head(abundance.model$X)
+abundance.model$covNames
+
+# Specify groups of how the variation should be partitioned
+groupnames.vp.species.abundance.model <- c("Depth", "Temperature", "Salinity", "Mixed Layer Depth", "Sea Ice") # Define the groups of variables
+groups.vp.species.abundance.model <- c(1,1,2,2,3,2,2,3,4,5) # Assign each variable to a group)
+
+vp.species.abundance.model <- computeVariancePartitioning(abundance.model, group = groups.vp.species.abundance.model, groupnames = groupnames.vp.species.abundance.model)
+vp.species.abundance.model <- data.frame(t(vp.species.abundance.model$vals))
+
+vp.species.abundance.model$Species <- rownames(vp.species.abundance.model)
+vp.species.abundance.model <- reshape2::melt(vp.species.abundance.model %>% group_by(Species) %>%
+                              summarise(
+                                Depth = Depth,
+                                Temperature = Temperature,
+                                Salinity = Salinity,
+                                Mixed.Layer.Depth = Mixed.Layer.Depth,
+                                Sea.Ice = Sea.Ice,
+                                Random..site = Random..site,
+                                Random..year = Random..year),
+                            id = "Species")
+
+mean.vp.species.abundance.model <- vp.species.abundance.model %>%
+  group_by(variable) %>%
+  summarise(Mean = round(mean(value), 2))
+mean.vp.species.abundance.model$variable <- gsub("Random..", "Random ", mean.vp.species.abundance.model$variable)
+capitalize_words <- function(text) {
+  str_replace_all(text, "\\b[a-z]", ~toupper(.x))
+}
+mean.vp.species.abundance.model$variable <- capitalize_words(mean.vp.species.abundance.model$variable)
+mean.vp.species.abundance.model$variable <- gsub("\\.", " ", mean.vp.species.abundance.model$variable)
+mean.vp.species.abundance.model[1, "variable"] <- "Depth (Logged)"
+
+mean.vp.species.abundance.model$Text <- paste(mean.vp.species.abundance.model$variable, "=", mean.vp.species.abundance.model$Mean)
+mean.vp.species.abundance.model.text <- as.data.frame(t(mean.vp.species.abundance.model$Text))
+colnames(mean.vp.species.abundance.model.text) <- c("Depth", "Temperature", "Salinity", "Mixed.Layer.Depth", "Sea.Ice", "Random..site", "Random..year")
+
+vp.species.abundance.model$variable <- factor(vp.species.abundance.model$variable, levels = c(
+  "Random..site", 
+  "Random..year",
+  "Mixed.Layer.Depth", 
+  "Sea.Ice", 
+  "Depth", 
+  "Salinity", 
+  "Temperature"
+))
+
+vp.species.abundance.model.plot <- ggplot(vp.species.abundance.model, aes(x = Species, y = value, fill = variable)) +
+  geom_bar(position = "fill", stat = "identity") +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 4),  # X-axis tick label size
+    axis.text.y = element_text(size = 4),  # Y-axis tick label size
+    axis.title.x = element_text(size = 6),  # X-axis label size
+    axis.title.y = element_text(size = 6),  # Y-axis label size
+    legend.text = element_text(size = 6),  # Legend text size
+    legend.title = element_text(size = 6),  # Legend title size
+    legend.key.size = unit(0.4, "cm"),  # Make legend squares smaller
+    legend.position = "right"
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Random..site" = "firebrick3",
+      "Random..year" = "lightcoral",
+      "Mixed.Layer.Depth" = "purple",
+      "Sea.Ice" = "yellow2",
+      "Depth" = "orange",
+      "Salinity" = "green3",
+      "Temperature" = "cornflowerblue"
+    ),
+    labels = c(
+      Random..site = paste0("", (mean.vp.species.abundance.model.text$Random..site)),
+      Random..year = paste0("", (mean.vp.species.abundance.model.text$Random..year)),
+      Mixed.Layer.Depth = paste0("", (mean.vp.species.abundance.model.text$Mixed.Layer.Depth)),
+      Sea.Ice = paste0("", (mean.vp.species.abundance.model.text$Sea.Ice)),
+      Depth = paste0("", (mean.vp.species.abundance.model.text$Depth)),
+      Salinity = paste0("", (mean.vp.species.abundance.model.text$Salinity)),
+      Temperature = paste0("", (mean.vp.species.abundance.model.text$Temperature))
+    )
+  ) +
+  labs(
+    y = "Variance Proportion",
+    x = "Species",
+    fill = NULL, 
+    title = NULL
+  ) +
+  theme(axis.text.y = element_text(margin = margin(r = 0))) +
+  scale_y_continuous(expand = c(0, 0))
+vp.species.abundance.model.plot
+ggsave("variance.paritioning.abundance.tiff", plot=vp.species.abundance.model.plot, device="tiff", width=15, height=9, units="cm", dpi=300)
+print("variance partitioning per species plot saved") 
+
 
 
 
