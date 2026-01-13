@@ -5,10 +5,28 @@ source /cluster/work/users/smo120/hmsc-hpc-dir/hmsc-venv/bin/activate
 SAM=${1:-250}
 THIN=${2:-100}
 
-input_path="init_file_1o.rds"
-output_path="init_file_1o.rds"
-output_path=$(printf "post_chain%.2d_file_1o.rds" $SLURM_ARRAY_TASK_ID)
+########################################################################
+######### OCCURRENCE MODEL #############################################
+########################################################################
+
+input_path="init_file_occurrence.rds"
+output_path="init_file_occurrence.rds"
+output_path=$(printf "post_chain%.2d_file_occurrence.rds" $SLURM_ARRAY_TASK_ID)
 
 
 # run sampling
 srun python3 -m hmsc.run_gibbs_sampler --input $input_path --output $output_path --samples $SAM --transient $(($SAM*$THIN)) --thin $THIN --verbose 100 --chain $SLURM_ARRAY_TASK_ID
+
+########################################################################
+######### ABUNDANCE MODEL ##############################################
+########################################################################
+
+input_path="init_file_abundance.rds"
+output_path="init_file_abundance.rds"
+output_path=$(printf "post_chain%.2d_file_abundance.rds" $SLURM_ARRAY_TASK_ID)
+
+
+# run sampling
+srun python3 -m hmsc.run_gibbs_sampler --input $input_path --output $output_path --samples $SAM --transient $(($SAM*$THIN)) --thin $THIN --verbose 100 --chain $SLURM_ARRAY_TASK_ID
+
+# End script "05 Compute MCMC chains in HMSC-HPC"
