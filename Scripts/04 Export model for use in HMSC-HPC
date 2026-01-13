@@ -5,7 +5,11 @@
 library("Hmsc")
 library("jsonify")
 
-load("occurrence_model_1o")
+########################################################################
+######### OCCURRENCE MODEL #############################################
+########################################################################
+
+load("occurrence_model")
 
 thin = 100 # interval of iterations per samples
 nSamples = 250 # number of samples taken per chain
@@ -13,8 +17,28 @@ nChains = 4
 verbose = 100
 transient = nSamples * thin
 
-init_obj = sampleMcmc(model_structure, samples=nSamples, thin=thin,
+init_obj = sampleMcmc(occurrence_model_structure, samples=nSamples, thin=thin,
                                             transient=transient, nChains=nChains,
                                             verbose=verbose, engine="HPC")
-init_file_path = file.path(getwd(), "init_file_1o.rds")
+init_file_path = file.path(getwd(), "init_file_occurrence.rds")
 saveRDS(to_json(init_obj), file=init_file_path)
+
+########################################################################
+######### ABUNDANCE MODEL ##############################################
+########################################################################
+
+load("abundance_model")
+
+thin = 100 # interval of iterations per samples
+nSamples = 250 # number of samples taken per chain
+nChains = 4
+verbose = 100
+transient = nSamples * thin
+
+init_obj = sampleMcmc(abundance_model_structure, samples=nSamples, thin=thin,
+                                            transient=transient, nChains=nChains,
+                                            verbose=verbose, engine="HPC")
+init_file_path = file.path(getwd(), "init_file_abundance.rds")
+saveRDS(to_json(init_obj), file=init_file_path)
+
+# End script "04 Export model for use in HMSC-HPC"
