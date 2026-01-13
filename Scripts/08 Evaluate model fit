@@ -5,18 +5,12 @@ install.packages(c(
 
 library(Hmsc)
 
+########################################################################
+######### OCCURRENCE MODEL #############################################
+########################################################################
 
 ## Evaluate model fit
     # Evaluate explanatory power
-        # For our model type (abundance, normal distribution) MF provides two metrics, 
-        # calculated for all individual species
-            # Root Mean Square Error ($RMSE): The standard deviation of the residuals 
-                # (prediction errors). Residuals are a measure of how far from the regression 
-                # line data points are. RMSE is a measure of how spread out these residuals 
-                # are. In other words, it tells you how concentrated the data is around 
-                # the line of best fit. Measure of the accuracy, i.e. how close the 
-                # measurement is to the true value
-            # R2: 
         # For our model type (occurrence, probit distribution) MF provides two metrics, 
         # calculated for all individual species
             # AUC: Widely used to test SDMs discriminatory ability (i.e. the ability 
@@ -32,17 +26,11 @@ predY.occurrence.model=computePredictedValues(occurrence.model)
 fit.occurrence.model = evaluateModelFit(hM = occurrence.model, predY = predY.occurrence.model)
 
 tiff("RMSE.AUC.TjurR2.occurrence.tiff", width=15, height=9, units="cm", res=300)
-tiff("RMSE.R2.abundance.tiff", width=15, height=9, units="cm", res=300)
 # RMSE (abundance + occurrence)
 mean(fit.occurrence.model$RMSE, na.rm = T)
 #png("RMSE.histogram.png", type = "cairo", res = 300)
 par(mfrow=c(1,3))
 hist(fit.occurrence.model$RMSE, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.occurrence.model$RMSE),2)))
-
-# R2 (abundance)
-mean(fit.occurrence.model$R2, na.rm = T)
-#png("R2.histogram.png", type = "cairo", res = 300)
-hist(fit.occurrence.model$R2, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.occurrence.model$R2, na.rm = T),2)))
 
 # AUC (occurrence)
 mean(fit.occurrence.model$AUC, na.rm = T)
@@ -52,5 +40,37 @@ hist(fit.occurrence.model$AUC, xlim = c(0,1), main=paste0("Mean = ", round(mean(
 mean(fit.occurrence.model$TjurR2, na.rm = T)
 hist(fit.occurrence.model$TjurR2, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.occurrence.model$TjurR2),2)))
 dev.off()
+
+########################################################################
+######### ABUNDANCE MODEL ##############################################
+########################################################################
+
+## Evaluate model fit
+    # Evaluate explanatory power
+        # For our model type (abundance, normal distribution) MF provides two metrics, 
+        # calculated for all individual species
+            # Root Mean Square Error ($RMSE): The standard deviation of the residuals 
+                # (prediction errors). Residuals are a measure of how far from the regression 
+                # line data points are. RMSE is a measure of how spread out these residuals 
+                # are. In other words, it tells you how concentrated the data is around 
+                # the line of best fit. Measure of the accuracy, i.e. how close the 
+                # measurement is to the true value
+            # R2: 
+
+predY.abundance.model=computePredictedValues(abundance.model)
+    # This function computes the predicted values for the response variable (Y) based on the fitted HMSC model (abundance.model). It uses the environmental covariates, traits, phylogenetic relationships, and random effects specified in the model to generate predictions.
+fit.abundance.model = evaluateModelFit(hM = abundance.model, predY = predY.abundance.model)
+
+tiff("RMSE.R2.abundance.tiff", width=15, height=9, units="cm", res=300)
+# RMSE (abundance + occurrence)
+mean(fit.abundance.model$RMSE, na.rm = T)
+#png("RMSE.histogram.png", type = "cairo", res = 300)
+par(mfrow=c(1,3))
+hist(fit.abundance.model$RMSE, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.abundance.model$RMSE),2)))
+
+# R2 (abundance)
+mean(fit.abundance.model$R2, na.rm = T)
+#png("R2.histogram.png", type = "cairo", res = 300)
+hist(fit.abundance.model$R2, xlim = c(0,1), main=paste0("Mean = ", round(mean(fit.abundance.model$R2, na.rm = T),2)))
 
 # End script "08 Evaluate model fit"
