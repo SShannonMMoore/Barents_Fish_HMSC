@@ -276,8 +276,8 @@ traits <- traits %>%
 is.numeric(traits)
 
 ## Read in Environmental Covariates Data
-env.data <- read.csv("environment.csv")
-head(env.data)
+environment <- read.csv("environment.csv")
+head(environment)
 
 ## Save 
 head(study.design)
@@ -559,8 +559,8 @@ is.numeric(traits)
 
 ## Read in Environmental Covariates Data
 ## Read in Environmental Covariates Data
-env.data <- read.csv("environment.csv")
-head(env.data)
+environment <- read.csv("environment.csv")
+head(environment)
 
 ## Save 
 head(study.design)
