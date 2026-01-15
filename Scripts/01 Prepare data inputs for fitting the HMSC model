@@ -220,7 +220,7 @@ plot(taxo, cex=0.4)
 print("Taxonomic tree plotted")
 
 ## Read in Trait Data
-traits <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
+traits <- read.csv("traits.csv", sep = ";", check.names = FALSE) %>%
   dplyr::select(species, fecundity, max.body.size, trophic.level) %>%
   mutate(log_fecundity = log(fecundity)) %>%
   dplyr::select(-fecundity) %>%
@@ -276,112 +276,8 @@ traits <- traits %>%
 is.numeric(traits)
 
 ## Read in Environmental Covariates Data
-env.data <- read.csv("SST.SBT.SSS.SBS.depth.icedays.mlotst.seasonality.csv")
-env.data <- env.data %>%
-  dplyr::select(-SSS, SSS_seasonality)
+env.data <- read.csv("environment.csv")
 head(env.data)
-
-## Match Environmental Covariates to Sampling Coordinates
-# Extract coordinates
-load("study.design.polygons.R")
-survey.coords <- dplyr::select(study.design, latitude, longitude)
-head(survey.coords)
-env.coords <- dplyr::select(env.data, latitude, longitude)
-head(env.coords)
-
-unique.env.coords <- env.coords %>% distinct(latitude, longitude, .keep_all=TRUE)
-
-# Match environmental coordinates to closest survey coordinates
-start.time <- Sys.time()
-start.time
-matched.coords <- match_nrst_haversine(
-  survey.coords$latitude, survey.coords$longitude,
-  unique.env.coords$latitude, unique.env.coords$longitude,
-  cartesian_R = 0.125
-)
-print(Sys.time() - start.time)
-  # matched.coords should be same length as survey.coords
-
-head(matched.coords)
-unique.env.coords[2554,]
-survey.coords[1,]
-  # Matches
-
-# Add positional indices to survey and matched coordinates
-survey.coords <- survey.coords %>%
-  mutate(index = 1:nrow(survey.coords))
-matched.coords <- matched.coords %>%
-  mutate(index = 1:nrow(matched.coords))
-
-unique.survey.coords <- survey.coords %>% distinct(latitude, longitude, .keep_all=TRUE)
-unique.matched.coords <- matched.coords %>% distinct(pos, .keep_all=TRUE)
-
-# Join matched coordinates with survey coordinates
-survey.coords.matched.coords <- left_join(matched.coords, survey.coords, by = "index")
-survey.coords.matched.coords <- survey.coords.matched.coords %>%
-  dplyr::rename(
-  survey.longitude = longitude,
-  survey.latitude = latitude,
-)
-
-# Add positional indices to environmental coordinates
-unique.env.coords <- unique.env.coords %>%
-  mutate(index = 1:nrow(unique.env.coords))
-
-# Join matched survey coordinates with environmental coordinates
-all.matched.coords <- left_join(survey.coords.matched.coords, unique.env.coords, by = c('pos' = 'index'))
-all.matched.coords <- all.matched.coords %>%
-  dplyr::rename(
-    env.longitude = longitude,
-    env.latitude = latitude,
-  )
-
-# Rename columns for clarity and create site identifiers
-all.matched.coords <- all.matched.coords %>%
-  dplyr::select(-pos, -dist, -index) %>%
-  mutate(
-    survey.site = str_c(survey.latitude, survey.longitude),
-    env.site = str_c(env.latitude, env.longitude)
-  )
-
-unique.survey.site <- all.matched.coords %>% distinct(survey.site, .keep_all=TRUE)
-unique.study.design <- study.design %>% distinct(site.hole, .keep_all=TRUE)
-
-## Merge with Survey Data
-# Join environmental coordinates with survey data
-env.coords.study.design <- left_join(all.matched.coords, unique.study.design, by = c('survey.site' = 'site.hole'))
-head(env.coords.study.design)
-
-# Remove redundant columns and create unique site-time identifier
-env.coords.study.design <- env.coords.study.design %>%
-  dplyr::select(-latitude, -longitude, -year, -month, -day) %>%
-  mutate(env.time = str_c(env.latitude, env.longitude, time))
-
-# Prepare environmental data for merging
-env.data <- env.data %>%
-  mutate(env.time = str_c(latitude, longitude, time))
-
-# Convert time column to `IDate` format for consistency
-env.coords.study.design$time <- as.IDate(env.coords.study.design$time)
-
-# Merge environmental data with survey data using the site-time identifier
-start.time <- Sys.time()
-env.merged <- left_join(env.coords.study.design, env.data, by = "env.time")
-print(Sys.time() - start.time)  # Print time taken for merging
-
-## Finalize Environmental Data
-# Clean up the merged data
-env.coords.time <- env.merged %>%
-  dplyr::select(
-    -survey.site, -env.site, -env.time, -latitude, -longitude, -time.y
-  ) %>%
-  dplyr::rename(time = time.x)
-
-# Extract relevant environmental covariates for modeling
-environment <- env.merged %>%
-  dplyr::select(
-    log_depth, SST, SBT, SSS, SBS, SST_seasonality,  
-    SBT_seasonality, SSS_seasonality, SBS_seasonality, mixed_layer, sea_ice)
 
 ## Save 
 head(study.design)
@@ -606,7 +502,7 @@ plot(taxo, cex=0.4)
 print("Taxonomic tree plotted")
 
 ## Read in Trait Data
-traits <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
+traits <- read.csv("traits.csv", sep = ";", check.names = FALSE) %>%
   dplyr::select(species, fecundity, max.body.size, trophic.level) %>%
   mutate(log_fecundity = log(fecundity)) %>%
   dplyr::select(-fecundity) %>%
@@ -662,112 +558,9 @@ traits <- traits %>%
 is.numeric(traits)
 
 ## Read in Environmental Covariates Data
-env.data <- read.csv("SST.SBT.SSS.SBS.depth.icedays.mlotst.seasonality.csv")
-env.data <- env.data %>%
-  dplyr::select(-SSS, SSS_seasonality)
+## Read in Environmental Covariates Data
+env.data <- read.csv("environment.csv")
 head(env.data)
-
-## Match Environmental Covariates to Sampling Coordinates
-# Extract coordinates
-load("study.design.polygons.R")
-survey.coords <- dplyr::select(study.design, latitude, longitude)
-head(survey.coords)
-env.coords <- dplyr::select(env.data, latitude, longitude)
-head(env.coords)
-
-unique.env.coords <- env.coords %>% distinct(latitude, longitude, .keep_all=TRUE)
-
-# Match environmental coordinates to closest survey coordinates
-start.time <- Sys.time()
-start.time
-matched.coords <- match_nrst_haversine(
-  survey.coords$latitude, survey.coords$longitude,
-  unique.env.coords$latitude, unique.env.coords$longitude,
-  cartesian_R = 0.125
-)
-print(Sys.time() - start.time)
-  # matched.coords should be same length as survey.coords
-
-head(matched.coords)
-unique.env.coords[2554,]
-survey.coords[1,]
-  # Matches
-
-# Add positional indices to survey and matched coordinates
-survey.coords <- survey.coords %>%
-  mutate(index = 1:nrow(survey.coords))
-matched.coords <- matched.coords %>%
-  mutate(index = 1:nrow(matched.coords))
-
-unique.survey.coords <- survey.coords %>% distinct(latitude, longitude, .keep_all=TRUE)
-unique.matched.coords <- matched.coords %>% distinct(pos, .keep_all=TRUE)
-
-# Join matched coordinates with survey coordinates
-survey.coords.matched.coords <- left_join(matched.coords, survey.coords, by = "index")
-survey.coords.matched.coords <- survey.coords.matched.coords %>%
-  dplyr::rename(
-  survey.longitude = longitude,
-  survey.latitude = latitude,
-)
-
-# Add positional indices to environmental coordinates
-unique.env.coords <- unique.env.coords %>%
-  mutate(index = 1:nrow(unique.env.coords))
-
-# Join matched survey coordinates with environmental coordinates
-all.matched.coords <- left_join(survey.coords.matched.coords, unique.env.coords, by = c('pos' = 'index'))
-all.matched.coords <- all.matched.coords %>%
-  dplyr::rename(
-    env.longitude = longitude,
-    env.latitude = latitude,
-  )
-
-# Rename columns for clarity and create site identifiers
-all.matched.coords <- all.matched.coords %>%
-  dplyr::select(-pos, -dist, -index) %>%
-  mutate(
-    survey.site = str_c(survey.latitude, survey.longitude),
-    env.site = str_c(env.latitude, env.longitude)
-  )
-
-unique.survey.site <- all.matched.coords %>% distinct(survey.site, .keep_all=TRUE)
-unique.study.design <- study.design %>% distinct(site.hole, .keep_all=TRUE)
-
-## Merge with Survey Data
-# Join environmental coordinates with survey data
-env.coords.study.design <- left_join(all.matched.coords, unique.study.design, by = c('survey.site' = 'site.hole'))
-head(env.coords.study.design)
-
-# Remove redundant columns and create unique site-time identifier
-env.coords.study.design <- env.coords.study.design %>%
-  dplyr::select(-latitude, -longitude, -year, -month, -day) %>%
-  mutate(env.time = str_c(env.latitude, env.longitude, time))
-
-# Prepare environmental data for merging
-env.data <- env.data %>%
-  mutate(env.time = str_c(latitude, longitude, time))
-
-# Convert time column to `IDate` format for consistency
-env.coords.study.design$time <- as.IDate(env.coords.study.design$time)
-
-# Merge environmental data with survey data using the site-time identifier
-start.time <- Sys.time()
-env.merged <- left_join(env.coords.study.design, env.data, by = "env.time")
-print(Sys.time() - start.time)  # Print time taken for merging
-
-## Finalize Environmental Data
-# Clean up the merged data
-env.coords.time <- env.merged %>%
-  dplyr::select(
-    -survey.site, -env.site, -env.time, -latitude, -longitude, -time.y
-  ) %>%
-  dplyr::rename(time = time.x)
-
-# Extract relevant environmental covariates for modeling
-environment <- env.merged %>%
-  dplyr::select(
-    log_depth, SST, SBT, SSS, SBS, SST_seasonality,  
-    SBT_seasonality, SSS_seasonality, SBS_seasonality, mixed_layer, sea_ice)
 
 ## Save 
 head(study.design)
