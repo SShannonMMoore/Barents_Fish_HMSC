@@ -345,85 +345,107 @@ print("variance partitioning plot saved")
 
 # Figure 3. Beta PCA ----------------------------------------------------
 ##### OCCURRENCE MODEL #####
+# Perform PCA
 # Extract posterior means of beta parameters
-beta = getPostEstimate(occurrence.model, "Beta")
-beta.matrix <- t(beta$mean)  # Transpose beta matrix
-colnames(beta.matrix) <- occurrence.model$covNames  # Assign species names to columns
-rownames(beta.matrix) <- occurrence.model$spNames  # Assign covariate names to rows
-beta.matrix <- beta.matrix[, colnames(beta.matrix) != "(Intercept)"]  # Remove intercept column
+beta = getPostEstimate(pa.model, "Beta")
+beta.matrix <- beta$mean  # Extract mean beta coefficients
+colnames(beta.matrix) <- pa.model$spNames  # Assign species names to rows
+rownames(beta.matrix) <- pa.model$covNames  # Assign covariate names to columns
+beta.matrix <- t(beta.matrix)
+beta.matrix <- beta.matrix[, colnames(beta.matrix) != "(Intercept)"]
 
 # Perform PCA on the beta matrix
 beta.pca <- prcomp(beta.matrix, scale. = TRUE)
-pca.scores <- beta.pca$x  # PCA scores for species
-summary(beta.pca)  # Variance explained by each PC
+# Inspect PCA results
+summary(beta.pca)  # Variance explained by each principal component
 screeplot(beta.pca, type = "lines")
+pca.scores <- beta.pca$x  # PCA scores for species
 
+# Example species classification
+species.regions <- fread("species.regions.csv")
+species.classification <- species.regions 
 # Merge PCA scores with species classification
-species.regions <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
-  dplyr::select(species, biogeographic.affinity) %>%
-  rename(region = biogeographic.affinity) %>%
+pca.data <- data.frame(pca.scores, species = rownames(pca.scores))
+pca.data <- left_join(pca.data, species.classification, by = "species", keep = T)
+pca.data <- pca.data %>%
+  dplyr::select(-species.y) %>%
+  rename(species = species.x) %>%
   mutate(region = case_when(
     species == "Phycis blennoides" ~ "B",
     species == "Lycenchelys muraena" ~ "A",
     species == "Lycenchelys sarsii" ~ "B",
     species == "Lycodes paamiuti" ~ "AB",
-    TRUE ~ region
-  ))
-write.table(species.regions, "species.regions.csv", sep = ";", row.names = FALSE, quote = TRUE)
+    TRUE ~ region))
 
-pca.data <- data.frame(pca.scores, species = rownames(pca.scores)) %>%
-  left_join(species.regions, by = "species") %>%
-  mutate(region = case_when(
-    species == "Phycis blennoides" ~ "B",
-    species == "Lycenchelys muraena" ~ "A",
-    species == "Lycenchelys sarsii" ~ "B",
-    species == "Lycodes paamiuti" ~ "AB",
-    TRUE ~ region
-  ))
+# Extract loadings (contributions of covariates to PCs)
+loadings <- as.data.frame(beta.pca$rotation)
+loadings$variable <- rownames(loadings)
 
-# Extract and scale loadings
-scaling.factor <- 0.5 * max(abs(pca.data$PC1), abs(pca.data$PC2))  # Scale based on plot range
-loadings <- as.data.frame(beta.pca$rotation) %>%
-  mutate(
-    variable = rownames(beta.pca$rotation),
-    PC1 = PC1 * scaling.factor,
-    PC2 = PC2 * scaling.factor
-  )
+sorted.loadings.pc1 <- loadings[order(-abs(loadings$PC1)), c("variable", "PC1")]
+sorted.loadings.pc2 <- loadings[order(-abs(loadings$PC2)), c("variable", "PC2")]
 
 # Highlight certain species
 species.to.label <- c("Gadus morhua", "Mallotus villosus","Leptagonus decagonus",
                       "Boreogadus saida", "Hippoglossus hippoglossus", "Melanogrammus aeglefinus", 
                       "Pollachius virens", "Reinhardtius hippoglossoides",
-                      "Liparis fabricii", "Amblyraja hyperborea", "Triglops nybelini", 
-                      "Chimaera monstrosa", "Argentina silus", "Phycis blennoides",
+                      "Liparis fabricii", "Amblyraja hyperborea", 
+                      "Chimaera monstrosa", "Phycis blennoides",
                       "Molva molva", "Sebastes viviparus", "Gymnocanthus tricuspis",
                       "Lycodes paamiuti", 'Paraliparis bathybius', "Lumpenus lampretaeformis",
                       "Anarhichas lupus", "Microstomus kitt", "Pleuronectes platessa",
-                      "Gaidropsarus argentatus", "Gadiculus argenteus", "Eumicrotremus spinosus")  # Occurrence
+                      "Gaidropsarus argentatus", "Gadiculus argenteus") 
 
 pca.data$label <- ifelse(pca.data$species %in% species.to.label, pca.data$species, NA)
 
-# Plot
-pca.occurrence <- ggplot(pca.data, aes(x = PC1, y = PC2, color = region)) +
+scaling.factor <- 0.5 * max(abs(pca.data$PC1), abs(pca.data$PC2))  # Scale based on plot range
+loadings.scaled <- loadings %>%
+  mutate(
+    PC1 = PC1 * scaling.factor,
+    PC2 = PC2 * scaling.factor
+  )
+
+# Manually rename specific labels
+loadings.scaled$label <- rownames(loadings.scaled) 
+loadings.scaled$label[loadings.scaled$label == "SST_seasonality"] <- "SST Seasonality"
+loadings.scaled$label[loadings.scaled$label == "SBT_seasonality"] <- "SBT Seasonality"
+loadings.scaled$label[loadings.scaled$label == "SBS_seasonality"] <- "SBS Seasonality"
+loadings.scaled$label[loadings.scaled$label == "ice_days"] <- "Sea Ice"
+loadings.scaled$label[loadings.scaled$label == "mixed_layer"] <- "MLD"
+loadings.scaled$label[loadings.scaled$label == "log_depth"] <- "Depth"
+
+library(ggrepel)
+
+pca <- ggplot(pca.data, aes(x = PC1, y = PC2, color = region)) +
   geom_point(size = 2) +
-  geom_segment(data = loadings, aes(x = 0, y = 0, xend = PC1, yend = PC2),
+  geom_segment(data = loadings.scaled, aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.2, "cm")), color = "black") +
-  geom_text_repel(data = loadings, aes(x = PC1, y = PC2, label = variable),
-                  size = 3, color = "black", max.overlaps = 20) +
-  geom_text_repel(aes(label = label, color = region), fontface = "italic", size = 3) +
+  geom_text_repel(data = loadings.scaled, aes(x = PC1, y = PC2, label = label),
+                  size = 4.5, color = "black", max.overlaps = 2, show.legend = FALSE,
+                  fontface = "bold") +
+  geom_text_repel(aes(label = label, color = region), fontface = "italic", size = 4.5, show.legend = FALSE) +  # Exclude from legend
   scale_color_manual(
     values = c("A" = "dodgerblue", "B" = "red2", "AB" = "green2"),
     labels = c("A" = "Arctic", "B" = "Boreal", "AB" = "Arcto-Boreal"),
     name = "Biogeographical\nGroup"
   ) +
   theme_classic() +
-  labs(
-    x = paste0("PC 1 (", round(summary(beta.pca)$importance[2, 1] * 100, 1), "%)"),
-    y = paste0("PC 2 (", round(summary(beta.pca)$importance[2, 2] * 100, 1), "%)"),
-    color = "Region"
+  theme(
+    axis.text.x = element_text(size = 14),  # X-axis tick label size
+    axis.text.y = element_text(size = 14),  # Y-axis tick label size
+    axis.title.x = element_text(size = 16),  # X-axis label size
+    axis.title.y = element_text(size = 16),  # Y-axis label size
+    plot.title = element_blank(),  # Plot title size and bold
+    legend.position = "right",  # Place the legend on the right (default)
+    legend.title = element_text(size = 16),  # Legend title size
+    legend.text = element_text(size = 14),  # Adjust legend text size
+    legend.key.size = unit(0.4, "cm")  # Adjust the size of legend keys
+  ) +
+  labs(x = "PC 1 (31%)",
+       y = "PC 2 (15%)",
+       color = "Region"
   )
 pca
-ggsave("pca.occurrence.tiff", plot = pca, device = "tiff", width = 25, height = 20, units = "cm", dpi = 300)
+ggsave("pca.occurrence.tiff", plot=pca, device="tiff", width=28, height=18, units="cm", dpi=300)
 
 # Identify outliers
 pca.scores.outliers <- as.data.frame(pca.scores) %>%
@@ -433,50 +455,44 @@ outliers <- pca.scores.outliers[1:2, ]  # Top 2 outliers
 print(outliers)
 
 ##### ABUNDANCE MODEL #####
+# Perform PCA
 # Extract posterior means of beta parameters
-beta = getPostEstimate(abundance.model, "Beta")
-beta.matrix <- t(beta$mean)  # Transpose beta matrix
-colnames(beta.matrix) <- abundance.model$covNames  # Assign species names to columns
-rownames(beta.matrix) <- abundance.model$spNames  # Assign covariate names to rows
-beta.matrix <- beta.matrix[, colnames(beta.matrix) != "(Intercept)"]  # Remove intercept column
+beta = getPostEstimate(pa.model, "Beta")
+beta.matrix <- beta$mean  # Extract mean beta coefficients
+colnames(beta.matrix) <- pa.model$spNames  # Assign species names to rows
+rownames(beta.matrix) <- pa.model$covNames  # Assign covariate names to columns
+beta.matrix <- t(beta.matrix)
+beta.matrix <- beta.matrix[, colnames(beta.matrix) != "(Intercept)"]
 
 # Perform PCA on the beta matrix
 beta.pca <- prcomp(beta.matrix, scale. = TRUE)
-pca.scores <- beta.pca$x  # PCA scores for species
-summary(beta.pca)  # Variance explained by each PC
+# Inspect PCA results
+summary(beta.pca)  # Variance explained by each principal component
 screeplot(beta.pca, type = "lines")
+pca.scores <- beta.pca$x  # PCA scores for species
 
+# Example species classification
+species.regions <- fread("species.regions.csv")
+species.classification <- species.regions 
 # Merge PCA scores with species classification
-species.regions <- read.csv("traits.official.csv", sep = ";", check.names = FALSE) %>%
-  dplyr::select(species, biogeographic.affinity) %>%
-  rename(region = biogeographic.affinity) %>%
+pca.data <- data.frame(pca.scores, species = rownames(pca.scores))
+pca.data <- left_join(pca.data, species.classification, by = "species", keep = T)
+pca.data <- pca.data %>%
+  dplyr::select(-species.y) %>%
+  rename(species = species.x) %>%
   mutate(region = case_when(
     species == "Phycis blennoides" ~ "B",
     species == "Lycenchelys muraena" ~ "A",
     species == "Lycenchelys sarsii" ~ "B",
     species == "Lycodes paamiuti" ~ "AB",
-    TRUE ~ region
-  ))
-write.table(species.regions, "species.regions.csv", sep = ";", row.names = FALSE, quote = TRUE)
+    TRUE ~ region))
 
-pca.data <- data.frame(pca.scores, species = rownames(pca.scores)) %>%
-  left_join(species.regions, by = "species") %>%
-  mutate(region = case_when(
-    species == "Phycis blennoides" ~ "B",
-    species == "Lycenchelys muraena" ~ "A",
-    species == "Lycenchelys sarsii" ~ "B",
-    species == "Lycodes paamiuti" ~ "AB",
-    TRUE ~ region
-  ))
+# Extract loadings (contributions of covariates to PCs)
+loadings <- as.data.frame(beta.pca$rotation)
+loadings$variable <- rownames(loadings)
 
-# Extract and scale loadings
-scaling.factor <- 0.5 * max(abs(pca.data$PC1), abs(pca.data$PC2))  # Scale based on plot range
-loadings <- as.data.frame(beta.pca$rotation) %>%
-  mutate(
-    variable = rownames(beta.pca$rotation),
-    PC1 = PC1 * scaling.factor,
-    PC2 = PC2 * scaling.factor
-  )
+sorted.loadings.pc1 <- loadings[order(-abs(loadings$PC1)), c("variable", "PC1")]
+sorted.loadings.pc2 <- loadings[order(-abs(loadings$PC2)), c("variable", "PC2")]
 
 # Highlight certain species
 species.to.label <- c("Gadus morhua", "Mallotus villosus","Leptagonus decagonus",
@@ -491,27 +507,54 @@ species.to.label <- c("Gadus morhua", "Mallotus villosus","Leptagonus decagonus"
 
 pca.data$label <- ifelse(pca.data$species %in% species.to.label, pca.data$species, NA)
 
-# Plot
+scaling.factor <- 0.5 * max(abs(pca.data$PC1), abs(pca.data$PC2))  # Scale based on plot range
+loadings.scaled <- loadings %>%
+  mutate(
+    PC1 = PC1 * scaling.factor,
+    PC2 = PC2 * scaling.factor
+  )
+
+# Manually rename specific labels
+loadings.scaled$label <- rownames(loadings.scaled) 
+loadings.scaled$label[loadings.scaled$label == "SST_seasonality"] <- "SST Seasonality"
+loadings.scaled$label[loadings.scaled$label == "SBT_seasonality"] <- "SBT Seasonality"
+loadings.scaled$label[loadings.scaled$label == "SBS_seasonality"] <- "SBS Seasonality"
+loadings.scaled$label[loadings.scaled$label == "ice_days"] <- "Sea Ice"
+loadings.scaled$label[loadings.scaled$label == "mixed_layer"] <- "MLD"
+loadings.scaled$label[loadings.scaled$label == "log_depth"] <- "Depth"
+
+library(ggrepel)
+
 pca <- ggplot(pca.data, aes(x = PC1, y = PC2, color = region)) +
   geom_point(size = 2) +
-  geom_segment(data = loadings, aes(x = 0, y = 0, xend = PC1, yend = PC2),
+  geom_segment(data = loadings.scaled, aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.2, "cm")), color = "black") +
-  geom_text_repel(data = loadings, aes(x = PC1, y = PC2, label = variable),
-                  size = 3, color = "black", max.overlaps = 20) +
-  geom_text_repel(aes(label = label, color = region), fontface = "italic", size = 3) +
+  geom_text_repel(data = loadings.scaled, aes(x = PC1, y = PC2, label = label),
+                  size = 4.5, color = "black", max.overlaps = 16, show.legend = FALSE, nudge_x = 0.0, nudge_y = -0.27) +
+  geom_text_repel(aes(label = label, color = region), fontface = "italic", size = 4.5, show.legend = FALSE) +  # Exclude from legend
   scale_color_manual(
     values = c("A" = "dodgerblue", "B" = "red2", "AB" = "green2"),
     labels = c("A" = "Arctic", "B" = "Boreal", "AB" = "Arcto-Boreal"),
     name = "Biogeographical\nGroup"
   ) +
   theme_classic() +
-  labs(
-    x = paste0("PC 1 (", round(summary(beta.pca)$importance[2, 1] * 100, 1), "%)"),
-    y = paste0("PC 2 (", round(summary(beta.pca)$importance[2, 2] * 100, 1), "%)"),
-    color = "Region"
+  theme(
+    axis.text.x = element_text(size = 14),  # X-axis tick label size
+    axis.text.y = element_text(size = 14),  # Y-axis tick label size
+    axis.title.x = element_text(size = 16),  # X-axis label size
+    axis.title.y = element_text(size = 16),  # Y-axis label size
+    plot.title = element_blank(),  # Plot title size and bold
+    legend.position = "right",  # Place the legend on the right (default)
+    legend.title = element_text(size = 16),  # Legend title size
+    legend.text = element_text(size = 14),  # Adjust legend text size
+    legend.key.size = unit(0.4, "cm")  # Adjust the size of legend keys
+  ) +
+  labs(x = "PC 1 (31%)",
+       y = "PC 2 (15%)",
+       color = "Region"
   )
 pca
-ggsave("pca.abundance.tiff", plot = pca, device = "tiff", width = 25, height = 20, units = "cm", dpi = 300)
+ggsave("pca.abundance.tiff", plot=pca, device="tiff", width=28, height=18, units="cm", dpi=300)
 
 # Identify outliers
 pca.scores.outliers <- as.data.frame(pca.scores) %>%
