@@ -415,13 +415,13 @@ loadings.scaled$label[loadings.scaled$label == "log_depth"] <- "Depth"
 
 library(ggrepel)
 
+
 pca <- ggplot(pca.data, aes(x = PC1, y = PC2, color = region)) +
   geom_point(size = 2) +
   geom_segment(data = loadings.scaled, aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.2, "cm")), color = "black") +
   geom_text_repel(data = loadings.scaled, aes(x = PC1, y = PC2, label = label),
-                  size = 4.5, color = "black", max.overlaps = 2, show.legend = FALSE,
-                  fontface = "bold") +
+                  size = 4.5, color = "black", max.overlaps = 2, show.legend = FALSE, nudge_x = 0.0, nudge_y = -0.17) +
   geom_text_repel(aes(label = label, color = region), fontface = "italic", size = 4.5, show.legend = FALSE) +  # Exclude from legend
   scale_color_manual(
     values = c("A" = "dodgerblue", "B" = "red2", "AB" = "green2"),
