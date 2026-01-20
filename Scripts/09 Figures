@@ -584,23 +584,40 @@ env.traits <- as.data.frame(vp.occurrence.model$R2T$Beta[-1]) %>%
 # Reorder the environment factor based on sorted values
 env.traits$Environment <- factor(env.traits$Environment, levels = env.traits$Environment)
 
-# Plot
-env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = Environment)) +
-  geom_bar(stat = "identity", color = "black", linewidth = 0.25) +  # Barplot with black borders
+env.traits$environment.grouped <- env.traits$Environment
+env.traits$environment.grouped <- as.character(env.traits$environment.grouped)
+env.traits$environment.grouped[env.traits$Environment %in% c("SST", "SBT", "SST_seasonality", "SBT_seasonality")] <- "Temperature"
+env.traits$environment.grouped[env.traits$Environment %in% c("SBS", "SBS_seasonality")] <- "Salinity"
+env.traits$environment.grouped[env.traits$Environment == "sea_ice"] <- "Sea Ice"
+env.traits$environment.grouped[env.traits$Environment == "mixed_layer"] <- "Mixed Layer Depth"
+env.traits$environment.grouped[env.traits$Environment == "log_depth"] <- "Depth (logged)"
+env.traits <- env.traits %>%
+  mutate(environment.grouped = factor(environment.grouped)) %>%
+  group_by(environment.grouped) %>%
+  mutate(total_value = sum(value)) %>%  # Calculate total value for each group
+  ungroup() %>%
+  mutate(environment.grouped = reorder(environment.grouped, -total_value))  # Reorder by decreasing total value
+
+env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = environment.grouped)) +
+  geom_bar(stat = "identity", color = "black", linewidth = 0.25) +  # Barplot with white borders
   geom_text(aes(label = value), vjust = -0.5, size = 2) +  # Add text above each bar
-  scale_fill_manual(values = c(
-    "Random..site" = "firebrick3",
-    "Random..year" = "lightcoral",
-    "mixed_layer" = "purple",
-    "sea_ice" = "yellow2",
-    "log_depth" = "orange",
-    "SBS" = "green3",
-    "SBS_seasonality" = "green3",
-    "SST" = "cornflowerblue",
-    "SBT" = "cornflowerblue",
-    "SST_seasonality" = "cornflowerblue",
-    "SBT_seasonality" = "cornflowerblue"
-  )) +
+  scale_fill_manual(
+    values = c(
+      "Mixed Layer Depth" = "purple",
+      "Sea Ice" = "yellow2",
+      "Depth (logged)" = "orange",
+      "Salinity" = "green3",
+      "Temperature" = "cornflowerblue"
+    ),
+    labels = c(
+      "Mixed Layer Depth" = "Mixed Layer Depth",
+      "Sea Ice" = "Sea Ice",
+      "Depth (Logged)" = "Depth (Logged)",
+      "SBS & SBS Seasonality" = "SBS & SBS Seasonality",
+      "Temperature (SST, SBT, Seasonality)" = "Temperature (SST, SBT, Seasonality)"
+    ),
+    name = "Environmental Variables"  # Legend title
+  ) +
   scale_x_discrete(
     labels = c(
       "mixed_layer" = "Mixed Layer Depth",
@@ -612,24 +629,29 @@ env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = Env
       "SBT" = "SBT",
       "SST_seasonality" = "SST Seasonality",
       "SBT_seasonality" = "SBT Seasonality"
-    )
-  ) +
+    )) +
   scale_y_continuous(
-    limits = c(0, 18),  # Set the range of the y-axis
-    breaks = seq(0, 18, by = 2)  # Set y-axis breaks
+    limits = c(0, 18),  # Set the range of the y-axis (e.g., 0 to 100)
+    breaks = seq(0, 18, by = 2)  # Set the breaks on the y-axis (e.g., every 2 units)
   ) +
   labs(
+    title = NULL,  # Add a title
     y = "Percentage",  # Add y-axis label
-    x = NULL  # Remove x-axis label
+    x = NULL
   ) +
   theme_classic() +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # X-axis tick label size
     axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_blank(),  # X-axis label size
     axis.title.y = element_text(size = 8),  # Y-axis label size
-    legend.position = "none",  # Remove legend
-    panel.grid.major = element_line(color = "lightgray", size = 0.25),  # Add light gray grid lines
-    panel.grid.minor = element_blank()  # Remove minor grid lines
+    plot.title = element_text(size = 10, hjust = 0.5),  # Plot title size and bold
+    panel.grid.major = element_line(color = "lightgray", size = 0.25),  # Add light gray major grid lines
+    panel.grid.minor = element_blank(),  # Remove minor grid lines (optional)
+    legend.position = "right",  # Place the legend on the right (default)
+    legend.title = element_blank(),  # Adjust legend title size
+    legend.text = element_text(size = 6),  # Adjust legend text size
+    legend.key.size = unit(0.4, "cm")  # Adjust the size of legend keys
   )
 env.traits.plot
 ggsave("env.explained.by.traits.occurrence.tiff", plot=env.traits.plot, device="tiff", width=10, height=9, units="cm", dpi=300)
@@ -651,23 +673,40 @@ env.traits <- as.data.frame(vp.abundance.model$R2T$Beta[-1]) %>%
 # Reorder the environment factor based on sorted values
 env.traits$Environment <- factor(env.traits$Environment, levels = env.traits$Environment)
 
-# Plot
-env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = Environment)) +
-  geom_bar(stat = "identity", color = "black", linewidth = 0.25) +  # Barplot with black borders
+env.traits$environment.grouped <- env.traits$Environment
+env.traits$environment.grouped <- as.character(env.traits$environment.grouped)
+env.traits$environment.grouped[env.traits$Environment %in% c("SST", "SBT", "SST_seasonality", "SBT_seasonality")] <- "Temperature"
+env.traits$environment.grouped[env.traits$Environment %in% c("SBS", "SBS_seasonality")] <- "Salinity"
+env.traits$environment.grouped[env.traits$Environment == "sea_ice"] <- "Sea Ice"
+env.traits$environment.grouped[env.traits$Environment == "mixed_layer"] <- "Mixed Layer Depth"
+env.traits$environment.grouped[env.traits$Environment == "log_depth"] <- "Depth (logged)"
+env.traits <- env.traits %>%
+  mutate(environment.grouped = factor(environment.grouped)) %>%
+  group_by(environment.grouped) %>%
+  mutate(total_value = sum(value)) %>%  # Calculate total value for each group
+  ungroup() %>%
+  mutate(environment.grouped = reorder(environment.grouped, -total_value))  # Reorder by decreasing total value
+
+env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = environment.grouped)) +
+  geom_bar(stat = "identity", color = "black", linewidth = 0.25) +  # Barplot with white borders
   geom_text(aes(label = value), vjust = -0.5, size = 2) +  # Add text above each bar
-  scale_fill_manual(values = c(
-    "Random..site" = "firebrick3",
-    "Random..year" = "lightcoral",
-    "mixed_layer" = "purple",
-    "sea_ice" = "yellow2",
-    "log_depth" = "orange",
-    "SBS" = "green3",
-    "SBS_seasonality" = "green3",
-    "SST" = "cornflowerblue",
-    "SBT" = "cornflowerblue",
-    "SST_seasonality" = "cornflowerblue",
-    "SBT_seasonality" = "cornflowerblue"
-  )) +
+  scale_fill_manual(
+    values = c(
+      "Mixed Layer Depth" = "purple",
+      "Sea Ice" = "yellow2",
+      "Depth (logged)" = "orange",
+      "Salinity" = "green3",
+      "Temperature" = "cornflowerblue"
+    ),
+    labels = c(
+      "Mixed Layer Depth" = "Mixed Layer Depth",
+      "Sea Ice" = "Sea Ice",
+      "Depth (Logged)" = "Depth (Logged)",
+      "SBS & SBS Seasonality" = "SBS & SBS Seasonality",
+      "Temperature (SST, SBT, Seasonality)" = "Temperature (SST, SBT, Seasonality)"
+    ),
+    name = "Environmental Variables"  # Legend title
+  ) +
   scale_x_discrete(
     labels = c(
       "mixed_layer" = "Mixed Layer Depth",
@@ -679,24 +718,29 @@ env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = Env
       "SBT" = "SBT",
       "SST_seasonality" = "SST Seasonality",
       "SBT_seasonality" = "SBT Seasonality"
-    )
-  ) +
+    )) +
   scale_y_continuous(
-    limits = c(0, 18),  # Set the range of the y-axis
-    breaks = seq(0, 18, by = 2)  # Set y-axis breaks
+    limits = c(0, 18),  # Set the range of the y-axis (e.g., 0 to 100)
+    breaks = seq(0, 18, by = 2)  # Set the breaks on the y-axis (e.g., every 2 units)
   ) +
   labs(
+    title = NULL,  # Add a title
     y = "Percentage",  # Add y-axis label
-    x = NULL  # Remove x-axis label
+    x = NULL
   ) +
   theme_classic() +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # Rotate x-axis labels
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  # X-axis tick label size
     axis.text.y = element_text(size = 6),  # Y-axis tick label size
+    axis.title.x = element_blank(),  # X-axis label size
     axis.title.y = element_text(size = 8),  # Y-axis label size
-    legend.position = "none",  # Remove legend
-    panel.grid.major = element_line(color = "lightgray", size = 0.25),  # Add light gray grid lines
-    panel.grid.minor = element_blank()  # Remove minor grid lines
+    plot.title = element_text(size = 10, hjust = 0.5),  # Plot title size and bold
+    panel.grid.major = element_line(color = "lightgray", size = 0.25),  # Add light gray major grid lines
+    panel.grid.minor = element_blank(),  # Remove minor grid lines (optional)
+    legend.position = "right",  # Place the legend on the right (default)
+    legend.title = element_blank(),  # Adjust legend title size
+    legend.text = element_text(size = 6),  # Adjust legend text size
+    legend.key.size = unit(0.4, "cm")  # Adjust the size of legend keys
   )
 env.traits.plot
 ggsave("env.explained.by.traits.abundance.tiff", plot=env.traits.plot, device="tiff", width=10, height=9, units="cm", dpi=300)
