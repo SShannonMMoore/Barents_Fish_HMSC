@@ -720,8 +720,8 @@ env.traits.plot <- ggplot(env.traits, aes(x = Environment, y = value, fill = env
       "SBT_seasonality" = "SBT Seasonality"
     )) +
   scale_y_continuous(
-    limits = c(0, 18),  # Set the range of the y-axis (e.g., 0 to 100)
-    breaks = seq(0, 18, by = 2)  # Set the breaks on the y-axis (e.g., every 2 units)
+    limits = c(0, 12),  # Set the range of the y-axis (e.g., 0 to 100)
+    breaks = seq(0, 12, by = 2)  # Set the breaks on the y-axis (e.g., every 2 units)
   ) +
   labs(
     title = NULL,  # Add a title
