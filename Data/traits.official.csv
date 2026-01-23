@@ -1,0 +1,90 @@
+﻿species,common.name,egg.diameter.mean,source,fecundity,source,max.body.size,source,longevity,source,age.at.maturity,source,length.at.maturity,source,trophic.level,source,parental.care,source,biogeographic.affinity,source,body.shape,source
+Amblyraja hyperborea,Arctic skate,102.5,CP,30,CP,89,CP,24,CP,11,CP,45,CP,4.31,CP,non-guarder,CP,A,CP,flat,CP
+Amblyraja radiata,Starry ray,55,CP,26.5,CP,68.7,CP,16,CP,11,CP,35,CP,4.2,CP,non-guarder,CP,B,CP,flat,CP
+Ammodytes,,0.94,CP,13133,CP,20.5,CP,8.5,CP,2.35,CP,12.13,CP,2.9,CP,non-guarder,CP,B,CP,eel-like,CP
+Anarhichas denticulatus,Northern wolffish,6,CP,46500,CP,162,CP,16,CP,6,CP,80,CP,3.75,CP,guarder,CP,B,CP,elongated,CP
+Anarhichas lupus,Atlantic wolffish,6,CP,12740,CP,104,CP,20,CP,6,CP,50,CP,3.55,CP,guarder,CP,B,CP,elongated,CP
+Anarhichas minor,Spotted wolffish,3.35,CP,19700,CP,138.4,CP,40,CP,7,CP,70,CP,3.62,CP,guarder,CP,B,CP,elongated,CP
+Anisarchus medius,Stout eelblenny,2,CP,700,CP,13.2,CP,13,CP,6,CP,9.5,CP,3.22,CP,guarder,CP,B,CP,eel-like,CP
+Arctogadus glacialis,Arctic cod,1.75,CP,15000,CP,52,CP,11,CP,5,CP,24,CP,3.82,CP,non-guarder,CP,A,CP,fusiform,CP
+Arctozenus risso,Spotted barracudina,1.94,CP,100000,CP,29,CP,11,CP,6,CP,14.17,CP,3.22,CP,non-guarder,CP,AB,CP,elongated,CP
+Argentina silus,Greater argentine,3.25,CP,10381,CP,49,CP,35,CP,8,CP,26,CP,3.32,CP,non-guarder,CP,B,CP,elongated,CP
+Artediellus atlanticus,Atlantic hookear sculpin,2.25,CP,62,CP,14.3,CP,10,CP,3.5,CP,5.1,CP,3.42,CP,non-guarder,CP,B,CP,elongated,CP
+Bathyraja spinicauda,Spinetail ray,130,CP,47,CP,165,CP,50,CP,12,CP,118,CP,4.41,CP,non-guarder,CP,B,CP,flat,CP
+Boreogadus saida,Polar cod,1.75,CP,15000,CP,29,CP,5,CP,2,CP,20,CP,3.12,CP,non-guarder,CP,A,CP,fusiform,CP
+Brosme brosme,Tusk,1.35,CP,2300000,CP,69,CP,20,CP,9,CP,53,CP,3.9,CP,non-guarder,CP,B,CP,elongated,CP
+Careproctus,,3.75,CP,112,CP,25,CP,12,CP,4,CP,8,CP,3.58,CP,non-guarder,CP,A,CP,fusiform,CP
+Chimaera monstrosa,Rabbit fish,165,CP,100,CP,150,CP,26,CP,11.5,CP,45.9,CP,3.52,CP,non-guarder,CP,B,CP,elongated,CP
+Clupea harengus,Atlantic herring,1.85,CP,55000,CP,40,CP,25,CP,3,CP,24,CP,3.38,CP,non-guarder,CP,B,CP,elongated,CP
+Cottunculus microps,Polar sculpin,4.5,CP,375,CP,15.3,CP,12,CP,4,CP,9.4,CP,4.14,CP,non-guarder,CP,A,CP,elongated,CP
+Cyclopterus lumpus,Lumpfish,2.6,CP,194112,CP,55,CP,15,CP,3,CP,29,CP,3.89,CP,guarder,CP,B,CP,deep/short,CP
+Enchelyopus cimbrius,Fourbeard rockling,0.82,CP,500000,CP,36,CP,9,CP,3,CP,12.7,CP,3.53,CP,non-guarder,CP,B,CP,elongated,CP
+Eumicrotremus derjugini,Leatherfin lumpsucker,1.25,CP,2000,CP,11.3,CP,3,CP,1,CP,4.3,CP,3.25,CP,guarder,CP,A,CP,deep/short,CP
+Eumicrotremus spinosus,Atlantic spiny lumpsucker,3,CP,636,CP,14,CP,3,CP,1,CP,5.6,CP,3.48,CP,guarder,CP,A,CP,deep/short,CP
+Eutrigla gurnardus,Grey gurnard,1.35,EB,244949,EB,36,EB,21,EB,2.8,EB,,,3.87,EB,non-guarder,EB,B,Fishbase,elongated,EB
+Gadiculus argenteus,Silvery pout,1,CP,2763809.125,CP,22,CP,4,CP,2,CP,12.6,CP,3.6,CP,non-guarder,CP,B,CP,fusiform,CP
+Gadus morhua,Atlantic cod,1.39,CP,5900000,CP,123.1,CP,25,CP,9,CP,69.7,CP,4.09,CP,non-guarder,CP,B,CP,fusiform,CP
+Gaidropsarus argentatus,Arctic rockling,1.27,CP,500000,CP,42,CP,10,CP,4,CP,25,CP,3.39,CP,non-guarder,CP,A,CP,elongated,CP
+Gasterosteus aculeatus,Three-spined stickleback,1.305,CP,307.5,CP,7.5,CP,5,CP,1,CP,5.5,CP,3.31,CP,guarder,CP,B,CP,fusiform,CP
+Glyptocephalus cynoglossus,Witch flounder,1.16,CP,100000,CP,62,CP,18,CP,4.5,CP,30.4,CP,3.17,CP,non-guarder,CP,B,CP,flat,CP
+Gymnelus,,4.25,CP,16,CP,24,CP,5,CP,2,CP,9.8,CP,3.13,CP,guarder,CP,A,CP,eel-like,CP
+Gymnocanthus tricuspis,Arctic staghorn sculpin,1.5,CP,4655,CP,21,CP,8,CP,4,CP,11.8,CP,3.46,CP,non-guarder,CP,A,CP,elongated,CP
+Hippoglossoides platessoides,American plaice,2.44,CP,380000,CP,54,CP,19,CP,2.6,CP,35.2,CP,4.08,CP,non-guarder,CP,B,CP,flat,CP
+Hippoglossus hippoglossus,Atlantic halibut,3.4,CP,3750000,CP,220,CP,50,CP,12,CP,105,CP,4,CP,non-guarder,CP,B,CP,flat,CP
+Icelus,,1.7,CP,564,CP,13.85,CP,9,CP,2,CP,5.5,CP,3.62,CP,non-guarder,CP,AB,CP,elongated,CP
+Lepidorhombus whiffiagonis,Megrim,1.1,EB,500000,EB,47,EB,16,EB,2.8,EB,,,4.34,EB,non-guarder,EB,B,MF,flat,EB
+Leptagonus decagonus,Atlantic poacher,2,CP,687,CP,21.1,CP,11,CP,3,CP,11.6,CP,3.21,CP,non-guarder,CP,AB,CP,elongated,CP
+Leptoclinus maculatus,Daubed shanny,1.5,CP,644,CP,17.6,CP,10,CP,6,CP,8.9,CP,3.28,CP,guarder,CP,B,CP,eel-like,CP
+Limanda limanda,Common dab,1.2,CP,141000,CP,43,CP,13,CP,5,CP,22,CP,3.39,CP,non-guarder,CP,B,CP,flat,CP
+Liparidae,,1.58,CP,4147.5,CP,26.4,CP,7,CP,2.69,CP,8.5,CP,3.3,CP,non-guarder,CP,AB,CP,fusiform,CP
+Liparis bathyarcticus,Nebulous snailfish,1.31,EB,5398,EB,15,EB,5.3,EB,2.1,EB,,,3.51,EB,non-guarder,EB,A,MF,elongated,EB
+Liparis fabricii,Gelatinous snailfish,2.4,EB,600,EB,21,EB,8,EB,2.9,EB,,,3.33,EB,non-guarder,EB,A,MF,fusiform,EB
+Liparis liparis,Striped seasnail,1.5,EB,500,EB,15,EB,2,EB,1,EB,,,3.59,EB,non-guarder,EB,AB,Fishbase,elongated,EB
+Lophius piscatorius,Common monkfish,2.7,EB,1500000,EB,140,EB,24,EB,4.5,EB,,,4.45,EB,non-guarder,EB,B,MF,fusiform,EB
+Lumpenus lampretaeformis,Snake eelblenny,0.8,CP,334,CP,50,CP,16,CP,8,CP,14.5,CP,3.6,CP,hiders,CP,B,CP,eel-like,CP
+Lycenchelys kolthoffi,Checkered wolf eel,4.5,CP,32,CP,21,CP,8,CP,2,CP,14,CP,3.1,CP,guarder,CP,A,CP,eel-like,CP
+Lycenchelys muraena,Moray wolf eel,5.6,EB,29,EB,23,EB,7,EB,4,EB,,,3.5,EB,guarder,EB,A,Book,eel-like,EB
+Lycenchelys sarsii,Sar's wolf eel,5.4,EB,25,EB,23,EB,6,EB,4,EB,,,3.21,EB,guarder,EB,B,Book,eel-like,EB
+Lycodes esmarkii,Greater eelpout,5.5,CP,610,CP,74.5,CP,14,CP,3,CP,29,CP,3.91,CP,guarder,CP,B,CP,elongated,CP
+Lycodes eudipleurostictus,Doubleline eelpout,5.5,CP,216,CP,45,CP,13,CP,3,CP,19.5,CP,3.5,CP,guarder,CP,A,CP,elongated,CP
+Lycodes frigidus,Glacial eelpout,7.5,CP,500,CP,59,CP,33,CP,5,CP,25,CP,3.84,CP,guarder,CP,A,CP,elongated,CP
+Lycodes gracilis,Vahl's eelpout,4.45,CP,85,CP,38.6,CP,11,CP,3,CP,13,CP,3.65,CP,guarder,CP,B,CP,elongated,CP
+Lycodes pallidus,Pale eelpout,4.9,CP,80,CP,38.5,CP,9,CP,3,CP,13,CP,3.14,CP,guarder,CP,A,CP,elongated,CP
+Lycodes reticulatus,Arctic eelpout,6,CP,459,CP,70,CP,16,CP,4,CP,19,CP,3.49,CP,guarder,CP,A,CP,elongated,CP
+Lycodes rossi,Threespot eelpout,2.5,CP,337,CP,32.5,CP,13,CP,3,CP,13.5,CP,3.54,CP,guarder,CP,A,CP,elongated,CP
+Lycodes seminudus,Longear eelpout,5.5,CP,402,CP,50,CP,15,CP,4,CP,20.2,CP,3.79,CP,guarder,CP,A,CP,elongated,CP
+Lycodes squamiventer,Scalebelly eelpout,3.5,CP,55,CP,25,CP,21,CP,5,CP,14,CP,3.651666667,CP,guarder,CP,A,CP,elongated,CP
+Lycodes adolfi,Adolf's eelpout,5.6,EB,30,EB,24,EB,14.4,EB,3.6,EB,,,3.5,EB,guarder,EB,A,Book,elongated,EB
+Lycodes luetkenii,Lutken's eelpout,5.6,EB,30,EB,55,EB,14.4,EB,3.6,EB,,,3.95,EB,guarder,EB,A,Book,elongated,EB
+Lycodes paamiuti,Paamiut eelpout,5.6,EB,30,EB,24,EB,14.4,EB,3.6,EB,,,3.65,EB,guarder,EB,AB,Book,eel-like,EB
+Lycodonus flagellicauda,Whiptail scutepout,4.23,CP,50,CP,23,CP,5,CP,2,CP,12,CP,3.5,CP,guarder,CP,A,CP,eel-like,CP
+Macrourus berglax,Roughhead grenadier,2.2,CP,36500,CP,82.5,CP,25,CP,15,CP,28.5,CP,3.57,CP,non-guarder,CP,B,CP,elongated,CP
+Mallotus villosus,Capelin,0.522,CP,11855.5,CP,20,CP,5,CP,3,CP,14.6,CP,3.15,CP,non-guarder,CP,B,CP,elongated,CP
+Maurolicus muelleri,Silvery lightfish,0.515,CP,8354.5,CP,7.6,CP,3,CP,1,CP,2.5,CP,3.01,CP,non-guarder,CP,B,CP,elongated,CP
+Melanogrammus aeglefinus,Haddock,1.43,CP,9085000,CP,110,CP,20,CP,5.5,CP,37,CP,4.03,CP,non-guarder,CP,B,CP,fusiform,CP
+Merlangius merlangus,Whiting,1.145,CP,120535,CP,42.4,CP,20,CP,2,CP,25,CP,4.36,CP,non-guarder,CP,B,CP,fusiform,CP
+Micromesistius poutassou,Blue whiting,1.16,CP,122000,CP,37.1,CP,20,CP,4.5,CP,25.1,CP,4.13,CP,non-guarder,CP,B,CP,elongated,CP
+Microstomus kitt,Lemon sole,1.29,CP,95000,CP,60,CP,10,CP,5,CP,25,CP,3.21,CP,non-guarder,CP,B,CP,flat,CP
+Molva molva,Ling,0.55,CP,40000000,CP,119,CP,30,CP,6,CP,74,CP,4.4,CP,non-guarder,CP,B,CP,elongated,CP
+Myctophidae,,0.5,EB,3380,EB,6,EB,1.5,EB,0.5,EB,,,3.19,EB,non-guarder,EB,B,Book,fusiform,EB
+Myoxocephalus scorpius,Shorthorn sculpin,2.51,CP,5868,CP,38,CP,10,CP,3.5,CP,10,CP,3.89,CP,guarder,CP,AB,CP,elongated,CP
+Nansenia groenlandica,Large-eyed argentine,1.47,EB,,,25,EB,,,,,,,3.21,EB,non-guarder,EB,,,elongated,EB
+Paraliparis bathybius,Black seasnail,4.5,CP,428,CP,25,CP,9,CP,3,CP,10,CP,3.7225,CP,non-guarder,CP,A,CP,fusiform,CP
+Phycis blennoides,Greater forkbeard,0.84,EB,1643889,EB,50,EB,20,EB,3.5,EB,,,3.66,EB,non-guarder,EB,B,MF,fusiform,EB
+Pleuronectes platessa,European plaice,2.17,CP,552000,CP,86,CP,36,CP,10,CP,26.6,CP,3.23,CP,non-guarder,CP,B,CP,flat,CP
+Pollachius virens,Saithe,1.125,CP,6630000,CP,177.1,CP,30,CP,5.5,CP,55.4,CP,4.31,CP,non-guarder,CP,B,CP,fusiform,CP
+Rajella fyllae,Round ray,42,CP,47,CP,57,CP,14,CP,5,CP,36,CP,3.37,CP,non-guarder,CP,B,CP,flat,CP
+Rajella lintea,White skate,77.5,EB,47,EB,123,EB,14,EB,5,EB,,,3.62,EB,non-guarder,EB,B,MF,flat,EB
+Reinhardtius hippoglossoides,Greenland halibut,4.25,CP,28100,CP,111.7,CP,30,CP,7,CP,55,CP,4.38,CP,non-guarder,CP,B,CP,flat,CP
+Rhodichthys regina,Threadfin seasnail,1.31,EB,55,EB,31,EB,8,EB,3.2,EB,,,3.55,EB,non-guarder,EB,A,Book,elongated,EB
+Sebastes,,6.45,CP,89025,CP,51.5,CP,58.75,CP,10.15,CP,33.35,CP,3.99,CP,bearer,CP,AB,CP,fusiform,CP
+Sebastes mentella,Beaked redfish,6,CP,83900,CP,58,CP,70,CP,11,CP,30.7,CP,4.12,CP,bearer,CP,B,CP,fusiform,CP
+Sebastes norvegicus,Golden redfish,6.8,AW,85750,AW,50.2,AW,60,AW,11,AW,39.6,AW,4.04,EB,bearer,EB,B,Book,fusiform,EB
+Sebastes viviparus,Norway redfish,5.8,CP,15450,CP,34,CP,40,CP,12.5,CP,15,CP,4.03,CP,bearer,CP,B,CP,fusiform,CP
+Somniosus microcephalus,Greenland shark,550,CP,10,CP,730,CP,100,CP,70,CP,450,CP,4.22,CP,bearer,CP,B,CP,elongated,CP
+Syngnathidae,,1.27,CP,350.3,CP,36.3,CP,4.77,CP,1.33,CP,10,CP,3.68,CP,bearer,CP,B,CP,elongated,CP
+Triglops murrayi,Moustache sculpin,2,CP,329,CP,17.2,CP,10,CP,4,CP,7.6,CP,3.45,CP,non-guarder,CP,B,CP,elongated,CP
+Triglops nybelini,Bigeye sculpin,1.875,CP,541,CP,14.5,CP,7,CP,3,CP,5.6,CP,3.29,CP,non-guarder,CP,A,CP,elongated,CP
+Triglops pingelii,Ribbed sculpin,2.25,CP,310,CP,17.5,CP,9,CP,4,CP,8.7,CP,3.42,CP,non-guarder,CP,AB,CP,elongated,CP
+Trisopterus esmarkii,Norway pout,1.095,CP,222938,CP,25,CP,8,CP,2,CP,15,CP,3.24,CP,non-guarder,CP,B,CP,fusiform,CP
+Zoarcidae,,4.8,CP,194.2,CP,32.4,CP,13.9,CP,3.4,CP,16.2,CP,3.5,CP,guarder,CP,AB,CP,eel-like,CP
