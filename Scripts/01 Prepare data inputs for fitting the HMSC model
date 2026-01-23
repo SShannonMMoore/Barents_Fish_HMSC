@@ -220,7 +220,7 @@ plot(taxo, cex=0.4)
 print("Taxonomic tree plotted")
 
 ## Read in Trait Data
-traits <- read.csv("traits.csv", sep = ";", check.names = FALSE) %>%
+traits <- read.csv("traits.csv", check.names = FALSE) %>%
   dplyr::select(species, fecundity, max.body.size, trophic.level) %>%
   mutate(log_fecundity = log(fecundity)) %>%
   dplyr::select(-fecundity) %>%
@@ -268,7 +268,7 @@ traits <- traits %>%
   arrange(species)
 traits.used <- traits
 head(traits.used)
-write.table(traits.used, "traits.used.csv", sep = ";", row.names = FALSE, quote = TRUE)
+write.table(traits.used, "traits.used.csv", row.names = FALSE, quote = TRUE)
 
 traits <- traits %>% 
   dplyr::select(-species) %>%
@@ -502,7 +502,7 @@ plot(taxo, cex=0.4)
 print("Taxonomic tree plotted")
 
 ## Read in Trait Data
-traits <- read.csv("traits.csv", sep = ";", check.names = FALSE) %>%
+traits <- read.csv("traits.csv", check.names = FALSE) %>%
   dplyr::select(species, fecundity, max.body.size, trophic.level) %>%
   mutate(log_fecundity = log(fecundity)) %>%
   dplyr::select(-fecundity) %>%
@@ -550,7 +550,7 @@ traits <- traits %>%
   arrange(species)
 traits.used <- traits
 head(traits.used)
-write.table(traits.used, "traits.used.csv", sep = ";", row.names = FALSE, quote = TRUE)
+write.table(traits.used, "traits.used.csv", row.names = FALSE, quote = TRUE)
 
 traits <- traits %>% 
   dplyr::select(-species) %>%
