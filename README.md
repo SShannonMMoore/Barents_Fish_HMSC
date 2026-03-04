@@ -1,8 +1,6 @@
 # Barents_Fish_HMSC
 HMSC of the Barents Sea demersal fish community 
 
-Main contact: Shannon Moore (shannon.moore@uit.no)
-
 # Scripts
 - 01: Prepare data inputs for fitting the HMSC model
 - 02: Define model structure and random effects
